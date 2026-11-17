@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgriConnect USSD Simulator</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #DCD6C6; font-family: "Segoe UI", Roboto, Arial, sans-serif; }
+  .wrap { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; justify-content: center; padding: 24px; }
+  .feature { width: 300px; background: #2B2B2B; border-radius: 40px 40px 60px 60px; padding: 26px 22px 30px; box-shadow: 0 30px 60px rgba(0,0,0,.3); }
+  .brand { color: #aaa; text-align: center; font-size: 12px; letter-spacing: .2em; margin-bottom: 10px; }
+  .screen { background: #B9CFA4; border-radius: 6px; height: 260px; padding: 12px; font-family: "Courier New", monospace; font-size: 15px; color: #1C2A12; white-space: pre-wrap; overflow: hidden; border: 4px solid #1a1a1a; line-height: 1.3; }
+  .entry { margin-top: 10px; background: #fff; border-radius: 6px; display: flex; overflow: hidden; }
+  .entry input { flex: 1; border: 0; padding: 10px; font: 16px "Courier New", monospace; }
+  .entry button { border: 0; background: #1F4D2B; color: #fff; padding: 0 14px; font-weight: 700; }
+  .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+  .keys button { background: #444; color: #fff; border: 0; border-radius: 14px; padding: 12px 0; font-size: 18px; font-weight: 700; cursor: pointer; }
+  .keys button.call { background: #2E7D32; } .keys button.end { background: #B8322F; }
+  .side { max-width: 380px; background: #FFFDF8; border-radius: 16px; padding: 22px; color: #17241B; }
+  .side h1 { margin: 0 0 6px; font-size: 22px; color: #1F4D2B; }
+  .side code { background: #E3F0DF; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+  .side li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="feature">
+    <div class="brand">FEATURE PHONE</div>
+    <div class="screen" id="screen"></div>
+    <div class="entry"><input id="inp" inputmode="numeric" placeholder="Reply…" onkeydown="if(event.key==='Enter')send()"><button onclick="send()">SEND</button></div>
+    <div class="keys" id="keys"></div>
+  </div>
+  <div class="side">
+    <h1>Dial <code>*347#</code> — no internet needed</h1>
+    <p>Most rural farmers in Liberia use basic phones. AgriConnect works on any phone through USSD menus, SMS alerts and voice calls.</p>
+    <ul>
+      <li>Type <b>*347#</b> and press SEND (or the green key).</li>
+      <li>Reply with a menu number.</li>
+      <li><b>0</b> = back, <b>00</b> = main menu.</li>
+    </ul>
+    <p style="font-size:13px;color:#5B6B60">Short code shown is a placeholder; the real code is assigned by the telecom operators (Lonestar Cell MTN / Orange Liberia).</p>
+  </div>
+</div>
+<script>
+const MENU = {
+  root: { text: "AgriConnect Liberia\n1. Crop advice\n2. Weather\n3. Market prices\n4. Report pest/disease\n5. Ask an expert\n6. My profile", next: { 1: "crop", 2: "weather", 3: "market", 4: "pest", 5: "ask", 6: "profile" } },
+  crop: { text: "Choose crop:\n1. Rice\n2. Cassava\n3. Cocoa\n4. Vegetables\n0. Back", next: { 1: "rice", 2: "cassava", 3: "cocoa", 4: "veg" } },
+  rice: { text: "RICE - Bong, Nov:\nHarvest when 80% of grains are golden. Dry on tarpaulin. Store in clean bags off the floor.\n\n1. Get by SMS\n0. Back", next: { 1: "sms" } },
+  cassava: { text: "CASSAVA:\nPull & burn plants with yellow twisted leaves. Use clean cuttings only.\n\n1. Get by SMS\n0. Back", next: { 1: "sms" } },
+  cocoa: { text: "COCOA:\nRemove black pods every 2 weeks & bury them. Prune for air.\n\n1. Get by SMS\n0. Back", next: { 1: "sms" } },
+  veg: { text: "VEGETABLES:\nUse neem water for whiteflies. Spray in the evening, not before rain.\n\n1. Get by SMS\n0. Back", next: { 1: "sms" } },
+  weather: { text: "BONG - next 3 days:\nTue: Heavy rain 80%\nWed: Storm 90%\nThu: Showers 55%\nAdvice: Don't spray until Sat.\n\n0. Back", next: {} },
+  market: { text: "Choose market:\n1. Gbarnga\n2. Red Light\n3. Ganta\n0. Back", next: { 1: "mk1", 2: "mk1", 3: "mk1" } },
+  mk1: { text: "PRICES (LRD, sample):\nLocal rice/cup: 45\nCassava/bucket: 450\nPepper/pile: 75\nPalm oil/gal: 900\n\n0. Back", next: {} },
+  pest: { text: "What do you see?\n1. Worms eating leaves\n2. Yellow leaves\n3. Black/rotten pods\n4. Spots on leaves\n0. Back", next: { 1: "pestok", 2: "pestok", 3: "pestok", 4: "pestok" } },
+  pestok: { text: "Thank you. Report sent to your extension officer.\nRef: PR-2291\nYou will get advice by SMS within 24 hrs.\n\n00. Main menu", next: {} },
+  ask: { text: "An officer will CALL YOU BACK free of charge.\n1. Request call-back\n2. Leave voice message\n0. Back", next: { 1: "callback", 2: "callback" } },
+  callback: { text: "Request received.\nOfficer Mulbah (Bong) will call you within 24 hrs.\n\n00. Main menu", next: {} },
+  profile: { text: "Kollie M.\nSalala, Bong\nCrops: Rice, Cassava\nLanguage: English\n1. Change language\n0. Back", next: { 1: "lang" } },
+  lang: { text: "Language:\n1. Liberian English\n2. Kpelle (voice)\n3. Bassa (voice)\n4. Kissi (voice)\n0. Back", next: { 1: "profile", 2: "profile", 3: "profile", 4: "profile" } },
+  sms: { text: "SMS sent to your phone. Free of charge.\n\n00. Main menu", next: {} }
+};
+let stack = [];
+const screen = document.getElementById("screen");
+function show(t) { screen.textContent = t; }
+function idle() { stack = []; show("Lonestar\n\n\n   Dial *347#\n   for AgriConnect"); }
+function send(v) {
+  const inp = document.getElementById("inp");
+  const val = (v ?? inp.value).trim(); inp.value = "";
+  if (!stack.length) { if (val === "*347#") { stack = ["root"]; show(MENU.root.text); } else show("Unknown code.\nDial *347#"); return; }
+  if (val === "00") { stack = ["root"]; return show(MENU.root.text); }
+  if (val === "0") { if (stack.length > 1) stack.pop(); return show(MENU[stack.at(-1)].text); }
+  const nxt = MENU[stack.at(-1)].next[val];
+  if (nxt) { stack.push(nxt); show(MENU[nxt].text); } else show("Invalid choice.\n\n" + MENU[stack.at(-1)].text);
+}
+const keys = document.getElementById("keys");
+["1","2","3","4","5","6","7","8","9","*","0","#"].forEach(k => {
+  const b = document.createElement("button"); b.textContent = k;
+  b.onclick = () => document.getElementById("inp").value += k; keys.appendChild(b);
+});
+const call = document.createElement("button"); call.textContent = "📞"; call.className = "call"; call.onclick = () => send();
+const end = document.createElement("button"); end.textContent = "✖"; end.className = "end"; end.onclick = idle;
+const clr = document.createElement("button"); clr.textContent = "⌫"; clr.onclick = () => { const i = document.getElementById("inp"); i.value = i.value.slice(0, -1); };
+keys.append(call, clr, end);
+const demo = new URLSearchParams(location.search).get("demo");
+idle();
+if (demo) { send("*347#"); demo.split(",").forEach(d => send(d)); }
+</script>
+</body>
+</html>

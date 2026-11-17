@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgriConnect Liberia — Farmer App</title>
+<meta name="theme-color" content="#1F4D2B">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="stage">
+  <div class="phone" id="phone">
+    <div class="statusbar"><span>9:41</span><span>Lonestar ▂▄▆ · 🔋 76%</span></div>
+    <div class="appbar" id="appbar"></div>
+    <div class="content" id="content"></div>
+    <div id="footer"></div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const state = { screen: new URLSearchParams(location.search).get("screen") || "home", crop: "Rice (upland)", market: 1, chat: [...CHAT], diagnosis: null };
+
+const fmt = (n) => n ? n.toLocaleString("en-US") : "—";
+
+function appbar(title, back) {
+  $("#appbar").innerHTML =
+    (back ? `<button class="back" onclick="go('home')" aria-label="Back">←</button>` : `<span style="font-size:22px">🌱</span>`) +
+    `<h1>${title}</h1><span class="pill offline" title="Works without internet">● Offline ready</span>`;
+}
+
+function tabbar() {
+  const tabs = [["home","🏠","Home"],["guide","📅","Crops"],["pest","🔍","Pest Doctor"],["market","💰","Prices"],["ask","💬","Ask"]];
+  $("#footer").innerHTML = `<nav class="tabbar">` + tabs.map(([id, ic, l]) =>
+    `<button class="${state.screen===id?'on':''}" onclick="go('${id}')"><span class="ic">${ic}</span>${l}</button>`).join("") + `</nav>`;
+}
+
+const screens = {
+  home() {
+    appbar("AgriConnect", false);
+    const w = WEATHER[0];
+    return `
+      <div>
+        <div class="muted">${FARMER.district}, ${FARMER.county} County</div>
+        <p class="hello">Good morning, ${FARMER.name} 👋</p>
+      </div>
+      <div class="card weather-hero" onclick="go('weather')">
+        <span class="big">${w.icon}</span>
+        <div style="flex:1"><div class="temp">${w.hi}°C</div><div style="font-size:13px">${w.note} · ${w.rain}% rain</div></div>
+        <span style="font-size:13px;font-weight:700">5-day ›</span>
+      </div>
+      <div class="card alert">
+        <b>⚠ Pest alert — Bong County</b>
+        <div style="font-size:14px;margin-top:4px">Fall armyworm reported in 3 nearby towns. Check your maize & rice this week.</div>
+      </div>
+      <div class="grid">
+        <button class="tile" onclick="go('guide')"><span class="ic">📅</span>Crop Guide</button>
+        <button class="tile" onclick="go('pest')"><span class="ic">🔍</span>Pest Doctor</button>
+        <button class="tile" onclick="go('market')"><span class="ic">💰</span>Market Prices</button>
+        <button class="tile" onclick="go('ask')"><span class="ic">👩🏾‍🌾</span>Ask Expert</button>
+        <button class="tile" onclick="go('weather')"><span class="ic">🌦️</span>Weather</button>
+        <button class="tile" onclick="go('dealers')"><span class="ic">🏪</span>Agro-dealers</button>
+      </div>
+      <div class="card">
+        <h3>This week on your farm</h3>
+        ${TASKS.map((t,i)=>`<label class="task"><input type="checkbox" ${t.done?'checked':''} onchange="TASKS[${i}].done=this.checked"><span><span class="tag">${t.crop}</span> ${t.text}</span></label>`).join("")}
+      </div>
+      <div class="card" style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:26px">🔊</span>
+        <div style="flex:1"><b style="font-size:14px">Listen to today’s advice</b><div class="muted">Liberian English · Kpelle · Bassa</div></div>
+        <button class="btn alt" style="width:auto;padding:8px 12px" onclick="alert('In the real app this plays a 60-second voice message.')">▶ Play</button>
+      </div>`;
+  },
+
+  guide() {
+    appbar("Crop Guide", true);
+    const steps = CROP_GUIDES[state.crop];
+    return `
+      <div class="chips">${Object.keys(CROP_GUIDES).map(c=>`<button class="chip ${c===state.crop?'on':''}" onclick="state.crop='${c}';render()">${c}</button>`).join("")}</div>
+      <div class="card">
+        <div class="eyebrow">Season calendar · ${FARMER.county} County</div>
+        <h3 style="margin-top:4px">${state.crop}</h3>
+        <div class="timeline">
+          ${steps.map((s,i)=>`<div class="step ${i===2?'now':''}"><div class="when">${s.when}${i===2?' · NOW':''}</div><div class="t">${s.stage}</div><p>${s.tip}</p></div>`).join("")}
+        </div>
+      </div>
+      <button class="btn ghost" onclick="alert('Reminders will be sent by SMS before each stage.')">🔔 Remind me by SMS</button>`;
+  },
+
+  pest() {
+    appbar("Pest Doctor", true);
+    const d = state.diagnosis;
+    const opts = [["holes","Holes in leaves"],["caterpillar","Caterpillars / worms"],["frass","Sawdust-like droppings"],["yellow","Yellow patches on leaves"],["twisted","Leaves twisted / small"],["brown","Brown or black spots"],["rot","Fruit / pod rotting"],["spots","Diamond-shaped spots"]];
+    return `
+      <div class="photo-drop">
+        ${d ? `<div class="fake-photo">${Array.from({length:7},(_,i)=>`<span style="left:${15+i*11}%;top:${20+(i*37)%60}%"></span>`).join("")}</div>`
+            : `<div class="ic">📷</div><b>Take a photo of the sick plant</b><div class="muted">Works offline — we check it when you get network</div>`}
+      </div>
+      <div class="card">
+        <h3>Or tell us what you see</h3>
+        ${opts.map(([v,l])=>`<label class="check"><input type="checkbox" value="${v}" ${d&&d.picked.includes(v)?'checked':''}> ${l}</label>`).join("")}
+        <button class="btn" style="margin-top:8px" onclick="diagnose()">Check my plant</button>
+      </div>
+      ${d ? d.result ? `
+      <div class="card result">
+        <span class="match">${d.score}% match</span>
+        <h3 style="margin-top:6px">${d.result.name} <span class="muted">· ${d.result.crop}</span></h3>
+        <div class="muted">${d.result.signs}</div>
+        <b style="display:block;margin-top:10px;font-size:14px">What to do now</b>
+        <ol>${d.result.actions.map(a=>`<li>${a}</li>`).join("")}</ol>
+        <button class="btn alt" onclick="go('ask')">Send to extension officer</button>
+      </div>` : `<div class="card">We could not match these signs. Send a photo to an officer. <button class="btn alt" style="margin-top:8px" onclick="go('ask')">Ask Expert</button></div>` : ""}`;
+  },
+
+  market() {
+    appbar("Market Prices", true);
+    return `
+      <div>
+        <label class="eyebrow" for="mk">Market</label>
+        <select id="mk" onchange="state.market=+this.value;render()">${MARKETS.map((m,i)=>`<option value="${i}" ${i===state.market?'selected':''}>${m}</option>`).join("")}</select>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><h3>Today’s prices (LRD)</h3><span class="muted">Updated 7:30am</span></div>
+        <table>
+          <tr><th>Item</th><th style="text-align:right">Price</th><th style="text-align:right">Week</th></tr>
+          ${PRICES.map(p=>{const v=p.prices[state.market];const c=p.change>0?`<span class="up">▲ ${p.change}%</span>`:p.change<0?`<span class="down">▼ ${-p.change}%</span>`:`<span class="flat">— 0%</span>`;
+            return `<tr><td>${p.item}</td><td class="num">${fmt(v)}</td><td style="text-align:right">${v?c:'<span class="flat">n/a</span>'}</td></tr>`}).join("")}
+        </table>
+        <p class="muted" style="margin:10px 0 0">Sample data for the prototype. Real prices come from market reporters.</p>
+      </div>
+      <div class="card" style="display:flex;gap:10px;align-items:center">
+        <span style="font-size:24px">📈</span>
+        <div style="flex:1;font-size:14px"><b>Best place to sell pepper this week:</b> Red Light (Monrovia) — 100 LRD/pile</div>
+      </div>
+      <button class="btn ghost" onclick="alert('You will get an SMS when the price changes by more than 10%.')">🔔 Price alert by SMS</button>`;
+  },
+
+  ask() {
+    appbar("Ask an Expert", true);
+    setTimeout(()=>{const c=$("#content");c.scrollTop=c.scrollHeight;},0);
+    return `<div class="chat">${state.chat.map(m=>`<div class="bubble ${m.from}">${m.who?`<div class="who">${m.who}</div>`:""}${m.text}<div class="time">${m.time}</div></div>`).join("")}</div>`;
+  },
+
+  weather() {
+    appbar("Weather · Bong", true);
+    return `
+      <div class="card weather-hero"><span class="big">${WEATHER[0].icon}</span><div><div class="temp">${WEATHER[0].hi}°C</div><div style="font-size:13px">${WEATHER[0].note}</div></div></div>
+      <div class="card">
+        <h3>Next 5 days · chance of rain</h3>
+        ${WEATHER.map(w=>`<div class="day"><span class="ic">${w.icon}</span><span class="d">${w.day}</span><div class="rainbar"><i style="width:${w.rain}%"></i></div><b style="width:40px;text-align:right">${w.rain}%</b></div>`).join("")}
+      </div>
+      <div class="card" style="background:var(--leaf-soft);border-color:#C5DDBF">
+        <b>💡 Farm advice</b>
+        <div style="font-size:14px;margin-top:4px">Rain until Thursday. Don’t spray or apply fertilizer before Saturday. Make drainage channels for your cassava mounds.</div>
+      </div>`;
+  },
+
+  dealers() {
+    appbar("Agro-dealers near you", true);
+    return DEALERS.map(d=>`<div class="card"><div style="display:flex;justify-content:space-between"><h3>${d.name}</h3><span class="tag">${d.dist}</span></div><div class="muted">${d.items}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" style="padding:8px">📞 Call</button><button class="btn ghost" style="padding:8px">🗺 Directions</button></div></div>`).join("");
+  }
+};
+
+function diagnose() {
+  const picked = [...document.querySelectorAll('.check input:checked')].map(i=>i.value);
+  let best = null, bestScore = 0;
+  for (const p of PESTS) {
+    const hit = p.symptoms.filter(s=>picked.includes(s)).length;
+    const score = hit ? Math.round(100 * hit / Math.max(p.symptoms.length, picked.length)) : 0;
+    if (score > bestScore) { best = p; bestScore = score; }
+  }
+  state.diagnosis = { picked, result: best, score: Math.min(95, bestScore + 10) };
+  render();
+}
+
+function sendChat() {
+  const inp = $("#msg"); const t = inp.value.trim(); if (!t) return;
+  state.chat.push({ from: "farmer", text: t, time: "now" });
+  render();
+  setTimeout(()=>{ state.chat.push({ from: "officer", who: "AgriConnect", text: "Thank you. Your question is with an extension officer in Bong County. You will get an SMS when they reply.", time: "now" }); render(); }, 900);
+}
+
+function go(s) { state.screen = s; render(); }
+
+function render() {
+  $("#content").innerHTML = screens[state.screen]();
+  if (state.screen === "ask") {
+    $("#footer").innerHTML = `<div class="composer"><button class="mic" title="Record voice note" onclick="alert('Voice notes let farmers who don’t read ask questions.')">🎤</button><input id="msg" placeholder="Type your question…" onkeydown="if(event.key==='Enter')sendChat()"><button onclick="sendChat()" aria-label="Send">➤</button></div>`;
+  } else tabbar();
+}
+
+if (new URLSearchParams(location.search).get("demo") === "diagnosis") {
+  state.screen = "pest";
+  state.diagnosis = { picked: ["holes","caterpillar","frass"], result: PESTS[0], score: 92 };
+}
+render();
+if (state.diagnosis) document.querySelector(".content").scrollTop = 600;
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
