@@ -11,91 +11,430 @@
   aside.nav { background: var(--forest); color: #fff; padding: 22px 16px; }
   aside.nav .logo { font-weight: 800; font-size: 19px; margin-bottom: 26px; }
   aside.nav a { display: block; color: #DCEBD6; text-decoration: none; padding: 10px 12px; border-radius: 10px; font-weight: 700; font-size: 14px; margin-bottom: 4px; }
-  aside.nav a.on { background: rgba(255,255,255,.14); color: #fff; }
-  main { padding: 26px 30px; display: flex; flex-direction: column; gap: 18px; }
-  .top { display: flex; justify-content: space-between; align-items: center; }
+  aside.nav a:hover { background: rgba(255,255,255,.1); color: #fff; }
+  main { padding: 26px 30px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
   .top h1 { margin: 0; font-size: 24px; }
+  .mode { font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 8px; }
+  .mode.live { background: var(--leaf-soft); color: var(--forest); }
+  .mode.demo { background: var(--gold-soft); color: #7A5A0B; }
   .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-  .kpi .v { font-size: 30px; font-weight: 800; color: var(--forest); }
+  .kpi .v { font-size: 30px; font-weight: 800; color: var(--forest); font-variant-numeric: tabular-nums; }
   .kpi .l { font-size: 13px; font-weight: 700; }
+  .kpi.alert .v { color: var(--red); }
   .row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+  .card { min-width: 0; }
+  .card h3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .scroll { overflow-x: auto; }
   .bar { display: grid; grid-template-columns: 130px 1fr 50px; align-items: center; gap: 8px; font-size: 13px; margin: 5px 0; }
   .bar .track { height: 12px; background: var(--leaf-soft); border-radius: 6px; overflow: hidden; }
   .bar .track i { display: block; height: 100%; background: var(--leaf); border-radius: 6px; }
   .bar b { text-align: right; font-variant-numeric: tabular-nums; }
-  .status { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; }
-  .s-Urgent, .l-High { background: var(--red-soft); color: var(--red); }
-  .s-Open, .l-Medium { background: var(--gold-soft); color: #7A5A0B; }
-  .s-Answered, .l-Low { background: var(--leaf-soft); color: var(--forest); }
-  textarea, .dash select { width: 100%; font: inherit; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+  .status { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+  .s-new, .s-open, .l-Outbreak { background: var(--red-soft); color: var(--red); }
+  .l-Warning, .s-callback { background: var(--gold-soft); color: #7A5A0B; }
+  .s-verified, .s-answered, .l-Watch { background: var(--leaf-soft); color: var(--forest); }
+  .s-rejected, .s-closed { background: #ECEAE4; color: var(--muted); }
+  textarea, .dash select, .dash input[type=text] { width: 100%; font: inherit; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
   .chan { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
   .chan label { font-size: 13px; font-weight: 700; display: flex; gap: 4px; align-items: center; background: var(--leaf-soft); padding: 6px 10px; border-radius: 8px; }
-  .stack { display: flex; height: 22px; border-radius: 6px; overflow: hidden; margin: 8px 0; }
+  .chan label.off { background: #ECEAE4; color: var(--muted); }
+  .stack { display: flex; height: 22px; border-radius: 6px; overflow: hidden; margin: 8px 0; background: var(--leaf-soft); }
   .legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12.5px; }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; }
-  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--forest); color: #fff; padding: 14px 18px; border-radius: 12px; font-weight: 700; display: none; }
-  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } aside.nav { display: none; } .kpis, .row { grid-template-columns: 1fr; } main { padding: 16px; } }
+  .act { border: 0; border-radius: 8px; font-weight: 800; font-size: 12px; padding: 6px 10px; cursor: pointer; background: var(--forest); color: #fff; }
+  .act.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--ink); }
+  .act.warn { background: var(--gold); color: var(--ink); }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .answer { display: flex; gap: 6px; margin-top: 6px; }
+  .answer input { flex: 1; min-width: 0; }
+  td .q { font-size: 13.5px; }
+  .empty { color: var(--muted); font-size: 14px; padding: 10px 0; }
+  .sent-list { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; font-size: 13px; }
+  .sent-list div { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--forest); color: #fff; padding: 14px 18px; border-radius: 12px; font-weight: 700; display: none; max-width: 420px; z-index: 5; }
+  #toast.bad { background: var(--red); }
+  #login { display: none; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } aside.nav { display: none; } .kpis { grid-template-columns: 1fr 1fr; } .row { grid-template-columns: 1fr; } main { padding: 16px; } }
 </style>
 </head>
 <body class="dash">
 <div class="layout">
   <aside class="nav">
     <div class="logo">🌱 AgriConnect</div>
-    <a class="on" href="#">📊 Overview</a>
-    <a href="#">💬 Farmer questions</a>
-    <a href="#">⚠ Pest reports</a>
-    <a href="#">📣 Send advisory</a>
-    <a href="#">👩🏾‍🌾 Farmers</a>
-    <a href="#">💰 Market prices</a>
-    <a href="#">⚙ Content library</a>
+    <a href="#overview">📊 Overview</a>
+    <a href="#hotspots">⚠ Hotspots</a>
+    <a href="#weather">🌦️ Weather</a>
+    <a href="#prices">💰 Market prices</a>
+    <a href="#reports">🐛 Pest reports</a>
+    <a href="#questions">💬 Farmer questions</a>
+    <a href="#advisory">📣 Send advisory</a>
+    <a href="ussd.html">📱 USSD simulator</a>
   </aside>
   <main>
-    <div class="top">
+    <div class="top" id="overview">
       <div><div class="eyebrow">Extension Officer Portal · Ministry of Agriculture</div><h1>Good morning, Officer Mulbah</h1></div>
-      <span class="tag" style="font-size:13px;padding:6px 10px">Region: Bong · Lofa · Nimba</span>
+      <span class="mode" id="mode">…</span>
     </div>
+
+    <div class="card" id="login">
+      <h3>Officer login</h3>
+      <p class="muted">This server is protected. Enter the officer access code.</p>
+      <div class="answer"><input type="text" id="token" placeholder="Access code" autocomplete="off"><button class="act" onclick="saveToken()">Log in</button></div>
+    </div>
+
     <div class="kpis" id="kpis"></div>
+
     <div class="row">
       <div class="card"><h3>Registered farmers by county</h3><div id="counties"></div></div>
-      <div style="display:flex;flex-direction:column;gap:14px">
-        <div class="card"><h3>⚠ Pest & disease hotspots (7 days)</h3><table id="outbreaks"></table></div>
-        <div class="card"><h3>How farmers reach us</h3><div class="stack" id="stack"></div><div class="legend" id="legend"></div></div>
+      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+        <div class="card" id="hotspots"><h3>⚠ Hotspots (7 days) <span class="muted">3+ reports, same pest &amp; county</span></h3><div class="scroll"><table id="hotspotTable"></table></div></div>
+        <div class="card"><h3>How farmers joined</h3><div class="stack" id="stack"></div><div class="legend" id="legend"></div></div>
+        <div class="card" id="jobs"><h3>🤖 Automatic advice &amp; SMS</h3><div id="jobInfo" class="muted">…</div>
+          <div class="actions" style="margin-top:10px"><button class="act ghost" onclick="runAdvice(true)">Preview</button><button class="act" onclick="runAdvice(false)">Send due advice now</button></div>
+        </div>
       </div>
     </div>
+
     <div class="row">
-      <div class="card"><h3>Farmer questions queue</h3><table id="questions"></table></div>
-      <div class="card">
-        <h3>📣 Send an advisory</h3>
-        <select id="county"><option>All counties</option></select>
-        <div class="chan"><label><input type="checkbox" checked> SMS</label><label><input type="checkbox" checked> Voice call</label><label><input type="checkbox" checked> App</label><label><input type="checkbox"> Radio script</label></div>
-        <textarea id="msgtxt" rows="4">Fall armyworm seen in Nimba. Check maize funnels this week. Hand-pick caterpillars in the morning. Dial *347# for help.</textarea>
-        <div class="muted" id="count" style="margin:6px 0 10px"></div>
-        <button class="btn" onclick="broadcast()">Send to farmers</button>
+      <div class="card" id="weather"><h3>🌦️ Weather by county <button class="act ghost" onclick="refreshWeather()">Refresh now</button></h3><div class="scroll"><table id="weatherTable"></table></div><p class="muted" id="weatherNote" style="margin:8px 0 0"></p></div>
+      <div class="card" id="prices">
+        <h3>💰 Market prices <select id="pMarket" style="width:auto;font-size:13px;padding:6px"></select></h3>
+        <div class="scroll"><table id="priceTable"></table></div>
+        <div id="flagged"></div>
+        <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Market reporters (<span id="repCount">0</span>) · add one</summary>
+          <div class="answer"><input type="text" id="repPhone" placeholder="Phone"><input type="text" id="repName" placeholder="Name"><select id="repMarket" style="width:auto"></select><button class="act" onclick="addReporterForm()">Add</button></div>
+          <p class="muted" style="margin:6px 0 0">Reporters send: <b>PRICE GBARNGA RICE 45</b>. Unusual prices wait here for you to check.</p>
+        </details>
       </div>
     </div>
-    <p class="muted">Prototype — all numbers are sample data.</p>
+
+    <div class="card" id="reports"><h3>Pest reports <span class="muted">newest first</span></h3><div class="scroll"><table id="reportTable"></table></div></div>
+
+    <div class="row">
+      <div class="card" id="questions"><h3>Farmer questions</h3><div class="scroll"><table id="questionTable"></table></div></div>
+      <div class="card" id="advisory">
+        <h3>📣 Send an advisory</h3>
+        <div class="form-row">
+          <select id="bCounty" aria-label="County"><option value="">All counties</option></select>
+          <select id="bCrop" aria-label="Crop"><option value="">All crops</option></select>
+        </div>
+        <div class="chan">
+          <label><input type="checkbox" id="chSms" checked> SMS</label>
+          <label class="off" title="Coming in a later step"><input type="checkbox" disabled> Voice call (soon)</label>
+          <label class="off" title="Coming in a later step"><input type="checkbox" disabled> App (soon)</label>
+        </div>
+        <textarea id="bMsg" rows="4" maxlength="160">Fall armyworm seen in Nimba. Check your fields this week. Pick worms in the morning. Dial *347# option 4 to report.</textarea>
+        <div class="muted" id="bCount" style="margin:6px 0 10px"></div>
+        <button class="btn" id="bSend" onclick="broadcast()">Send to farmers</button>
+        <div class="sent-list" id="sentList"></div>
+      </div>
+    </div>
+    <p class="muted" id="footnote"></p>
   </main>
 </div>
 <div id="toast"></div>
 <script src="data.js"></script>
 <script>
+// ---------------------------------------------------------------------------
+// LIVE when served by the AgriConnect API (http://localhost:3000/prototype/dashboard.html)
+// or opened with ?api=<url>. DEMO (sample data from data.js) when opened as a plain file.
+// ---------------------------------------------------------------------------
 const $ = (s) => document.querySelector(s);
-$("#kpis").innerHTML = DASH.kpis.map(k => `<div class="card kpi"><div class="l">${k.label}</div><div class="v">${k.value}</div><div class="muted">${k.delta}</div></div>`).join("");
-const max = Math.max(...DASH.byCounty.map(c => c[1]));
-$("#counties").innerHTML = DASH.byCounty.map(([c, n]) => `<div class="bar"><span>${c}</span><div class="track"><i style="width:${100*n/max}%"></i></div><b>${n.toLocaleString()}</b></div>`).join("");
-$("#outbreaks").innerHTML = `<tr><th>Pest</th><th>County</th><th>Reports</th><th>Risk</th></tr>` + DASH.outbreaks.map(o => `<tr><td>${o.pest}</td><td>${o.county}</td><td class="num">${o.reports}</td><td><span class="status l-${o.level}">${o.level}</span></td></tr>`).join("");
-const colors = ["#1F4D2B", "#3E8E41", "#E8B33A", "#1E4C8A"];
-$("#stack").innerHTML = DASH.channels.map(([n, p], i) => `<i style="width:${p}%;background:${colors[i]}"></i>`).join("");
-$("#legend").innerHTML = DASH.channels.map(([n, p], i) => `<span><i style="background:${colors[i]}"></i>${n} ${p}%</span>`).join("");
-$("#questions").innerHTML = `<tr><th>Farmer</th><th>Crop</th><th>Question</th><th>Age</th><th>Status</th></tr>` + DASH.questions.map(q => `<tr><td><b>${q.farmer}</b><div class="muted">${q.county}</div></td><td>${q.crop}</td><td>${q.q}</td><td>${q.age}</td><td><span class="status s-${q.status}">${q.status}</span></td></tr>`).join("");
-$("#county").innerHTML += COUNTIES.map(c => `<option>${c}</option>`).join("");
-function updateCount() {
-  const c = $("#county").value; const found = DASH.byCounty.find(x => x[0] === c);
-  const n = found ? found[1] : DASH.byCounty.reduce((a, b) => a + b[1], 0);
-  $("#count").textContent = `Will reach ${n.toLocaleString()} farmers · ${$("#msgtxt").value.length}/160 characters per SMS`;
+const params = new URLSearchParams(location.search);
+const API = params.get("api") || (location.protocol.startsWith("http") ? location.origin : null);
+let live = false;
+let names = { pests: {}, crops: {} };
+let reach = null;
+
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const n = (v) => Number(v ?? 0).toLocaleString("en-US");
+const ago = (sqlTime) => {
+  if (!sqlTime) return "";
+  const mins = Math.max(0, Math.round((Date.now() - new Date(sqlTime.replace(" ", "T") + "Z")) / 60000));
+  return mins < 60 ? `${mins}m` : mins < 1440 ? `${Math.round(mins / 60)}h` : `${Math.round(mins / 1440)}d`;
+};
+function store(key, value) { try { value === undefined ? sessionStorage.removeItem(key) : sessionStorage.setItem(key, value); } catch {} }
+function load(key) { try { return sessionStorage.getItem(key); } catch { return null; } }
+
+function toast(text, bad = false) {
+  const t = $("#toast"); t.textContent = text; t.className = bad ? "bad" : ""; t.style.display = "block";
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => (t.style.display = "none"), 3500);
 }
-$("#county").onchange = updateCount; $("#msgtxt").oninput = updateCount; updateCount();
-function broadcast() { const t = $("#toast"); t.textContent = "✅ Advisory queued — " + $("#count").textContent.split("·")[0]; t.style.display = "block"; setTimeout(() => t.style.display = "none", 3000); }
+
+async function api(method, path, body) {
+  const headers = {};
+  if (body) headers["Content-Type"] = "application/json";
+  const token = load("officerToken");
+  if (token) headers.Authorization = "Bearer " + token;
+  const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  if (res.status === 401) { $("#login").style.display = "block"; throw new Error("Officer login required"); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.details ? data.details.join("; ") : data.error || "Request failed");
+  return data;
+}
+function saveToken() { store("officerToken", $("#token").value.trim()); $("#login").style.display = "none"; refresh(); }
+
+// ---------------- rendering (same for live and demo) ----------------
+function renderStats(s) {
+  $("#kpis").innerHTML = [
+    ["Registered farmers", n(s.farmers), `+${n(s.farmers_new_30d)} in the last 30 days`],
+    ["SMS sent", n(s.sms_sent), s.sms ? `${n(s.sms.queued)} waiting · ${n(s.sms.failed)} failed` : "advice, replies and alerts", s.sms?.failed > 0],
+    ["Reports to check", n(s.reports_to_check), `${n(s.pest_reports_7d)} reports in 7 days`, s.reports_to_check > 0],
+    ["Open questions", n(s.open_questions), `${n(s.hotspots)} hotspot(s) in ${n(s.counties_flagged)} county(ies)`, s.open_questions > 0]
+  ].map(([l, v, d, alert]) => `<div class="card kpi ${alert ? "alert" : ""}"><div class="l">${l}</div><div class="v">${v}</div><div class="muted">${d}</div></div>`).join("");
+
+  const max = Math.max(1, ...s.by_county.map((c) => c.farmers));
+  $("#counties").innerHTML = s.by_county.length
+    ? s.by_county.map((c) => `<div class="bar"><span>${esc(c.county)}</span><div class="track"><i style="width:${(100 * c.farmers) / max}%"></i></div><b>${n(c.farmers)}</b></div>`).join("")
+    : '<p class="empty">No farmers yet. Register one on the USSD simulator.</p>';
+
+  const colors = { ussd: "#1F4D2B", sms: "#3E8E41", assisted: "#E8B33A", app: "#1E4C8A", voice: "#B8322F" };
+  const total = s.by_channel.reduce((a, c) => a + c.farmers, 0) || 1;
+  $("#stack").innerHTML = s.by_channel.map((c) => `<i style="width:${(100 * c.farmers) / total}%;background:${colors[c.channel] ?? "#888"}"></i>`).join("");
+  $("#legend").innerHTML = s.by_channel.map((c) => `<span><i style="background:${colors[c.channel] ?? "#888"}"></i>${esc(c.channel.toUpperCase())} ${Math.round((100 * c.farmers) / total)}%</span>`).join("");
+}
+
+function renderHotspots(list) {
+  $("#hotspotTable").innerHTML = list.length
+    ? `<tr><th>Pest</th><th>County</th><th>Reports</th><th>Level</th><th></th></tr>` +
+      list.map((h, i) => `<tr><td>${esc(h.pest_name)}</td><td>${esc(h.county)}</td><td class="num">${h.reports}</td><td><span class="status l-${esc(h.level)}">${esc(h.level)}</span></td><td><button class="act warn" onclick="warnFarmers(${i})">Warn farmers</button></td></tr>`).join("")
+    : '<tr><td class="empty">No hotspots. When 3 farmers in one county report the same pest within 7 days, it shows here.</td></tr>';
+  renderHotspots.list = list;
+}
+
+function renderReports(list) {
+  $("#reportTable").innerHTML = list.length
+    ? `<tr><th>Ref</th><th>County</th><th>Crop</th><th>Likely pest</th><th>Via</th><th>Age</th><th>Status</th><th>Action</th></tr>` +
+      list.map((r) => {
+        const pest = names.pests[r.confirmed_pest ?? r.suggested_pest] ?? "Not matched";
+        const actions = r.status === "new"
+          ? `<div class="actions"><button class="act" onclick="setReport(${r.id},'verified')">Verify</button><button class="act ghost" onclick="setReport(${r.id},'rejected')">Reject</button></div>`
+          : r.status === "verified" ? `<button class="act ghost" onclick="setReport(${r.id},'closed')">Close</button>` : "";
+        return `<tr><td><b>PR-${r.id}</b></td><td>${esc(r.county)}</td><td>${esc(r.crop ?? "")}</td><td>${esc(pest)}${r.match_score ? ` <span class="muted">${r.match_score}%</span>` : ""}</td><td>${esc((r.channel ?? "").toUpperCase())}</td><td>${ago(r.created_at)}</td><td><span class="status s-${esc(r.status)}">${esc(r.status)}</span></td><td>${actions}</td></tr>`;
+      }).join("")
+    : '<tr><td class="empty">No reports yet. Report a pest on the USSD simulator (*347# → 4).</td></tr>';
+}
+
+function renderQuestions(list) {
+  // Don't redraw while the officer is typing an answer.
+  if (document.activeElement?.closest?.("#questionTable")) return;
+  $("#questionTable").innerHTML = list.length
+    ? `<tr><th>Farmer</th><th>Question</th><th>Age</th><th>Status</th></tr>` +
+      list.map((q) => {
+        const isCallback = q.kind === "callback";
+        const text = isCallback ? "📞 Wants a call-back" : esc(q.body);
+        const action = q.status !== "open" ? (q.answer ? `<div class="muted">↳ ${esc(q.answer)}</div>` : "")
+          : isCallback
+            ? `<div class="answer"><button class="act" onclick="answer(${q.id}, true)">Mark as called</button></div>`
+            : `<div class="answer"><input type="text" id="ans-${q.id}" maxlength="139" placeholder="Reply by SMS…" onkeydown="if(event.key==='Enter')answer(${q.id})"><button class="act" onclick="answer(${q.id})">Send</button></div>`;
+        return `<tr><td><b>${esc(q.phone ?? "")}</b><div class="muted">${esc(q.county ?? "")} · ${esc((q.channel ?? "").toUpperCase())}</div></td><td><div class="q">${text}</div>${action}</td><td>${ago(q.created_at)}</td><td><span class="status s-${isCallback && q.status === "open" ? "callback" : esc(q.status)}">${esc(q.status)}</span></td></tr>`;
+      }).join("")
+    : '<tr><td class="empty">No questions yet. Farmers ask with SMS “ASK …” or *347# → 5.</td></tr>';
+}
+
+function renderBroadcasts(list) {
+  $("#sentList").innerHTML = list.length
+    ? "<b>Recently sent</b>" + list.slice(0, 4).map((b) => `<div>${esc(b.message)}<br><span class="muted">${b.counties.length ? esc(b.counties.join(", ")) : "All counties"} · ${b.crops.length ? esc(b.crops.join(", ")) : "all crops"} · ${n(b.reach)} farmers · ${ago(b.created_at)} ago</span></div>`).join("")
+    : "";
+}
+
+// ---------------- actions ----------------
+async function setReport(id, status) {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  try {
+    const r = await api("PATCH", `/api/pest-reports/${id}`, { status });
+    toast(`PR-${id} ${status}.` + (r.notified ? " The farmer got an SMS." : ""));
+    refresh();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function answer(id, called = false) {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  const input = $(`#ans-${id}`);
+  const text = called ? "" : input.value.trim();
+  if (!called && !text) return toast("Write a reply first.", true);
+  try {
+    const r = await api("PATCH", `/api/questions/${id}`, { answer: text, answered_by: "Officer Mulbah" });
+    if (input) input.blur();
+    toast(r.notified ? "Reply sent to the farmer by SMS." : "Marked as called.");
+    refresh();
+  } catch (e) { toast(e.message, true); }
+}
+
+function warnFarmers(i) {
+  const h = renderHotspots.list[i];
+  $("#bCounty").value = h.county;
+  $("#bCrop").value = "";
+  $("#bMsg").value = `${h.pest_name} reported by ${h.reports} farmers in ${h.county}. Check your fields this week. Dial *347# option 4 to report.`.slice(0, 160);
+  updatePreview();
+  $("#advisory").scrollIntoView({ behavior: "smooth" });
+  $("#bMsg").focus();
+}
+
+function target() {
+  return { counties: $("#bCounty").value ? [$("#bCounty").value] : [], crops: $("#bCrop").value ? [$("#bCrop").value] : [] };
+}
+
+async function updatePreview() {
+  const len = $("#bMsg").value.length;
+  if (live) {
+    try { reach = (await api("POST", "/api/broadcasts/preview", target())).reach; } catch { reach = null; }
+  } else {
+    const c = $("#bCounty").value; const found = DASH.byCounty.find((x) => x[0] === c);
+    reach = found ? found[1] : DASH.byCounty.reduce((a, b) => a + b[1], 0);
+  }
+  $("#bCount").textContent = `Will reach ${reach == null ? "?" : n(reach)} farmers · ${len}/160 characters (one SMS)`;
+}
+
+async function broadcast() {
+  if (!live) return toast("Demo mode: start the API to send for real.");
+  if (!$("#chSms").checked) return toast("Choose at least one channel.", true);
+  if (!reach) return toast("No farmers match this county and crop.", true);
+  if (!confirm(`Send this SMS to ${n(reach)} farmers?`)) return;
+  $("#bSend").disabled = true;
+  try {
+    const b = await api("POST", "/api/broadcasts", { ...target(), channels: ["sms"], message: $("#bMsg").value, sent_by: "Officer Mulbah" });
+    toast(`✅ Queued for ${n(b.queued)} farmers. They go out within seconds.`);
+    refresh();
+  } catch (e) { toast(e.message, true); }
+  $("#bSend").disabled = false;
+}
+
+function renderJobs(j) {
+  const last = j.advice.last_runs[0];
+  const when = (iso) => new Date(iso).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+  $("#jobInfo").innerHTML =
+    `Crop-stage advice goes out <b>every day at ${String(j.advice.hour_utc).padStart(2, "0")}:00</b> (next: ${esc(when(j.advice.next_run))}).<br>` +
+    (last ? `Last run: ${esc(last.trigger)}, ${esc(last.started_at.slice(0, 16))} UTC: ${n(last.result.sent)} sent, ${n(last.result.recent)} already had it, ${n(last.result.cap)} over the weekly limit.<br>` : "No run yet.<br>") +
+    `SMS provider: <b>${esc(j.sms.provider)}</b>${j.sms.provider === "log" ? " (development: not sent to real phones)" : ""} · ${n(j.sms.sent)} sent · ${n(j.sms.delivered)} delivered · ${n(j.sms.queued)} waiting · ${n(j.sms.failed)} failed`;
+}
+
+async function runAdvice(dryRun) {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  if (!dryRun && !confirm("Send crop advice now to every farmer who is due for it?")) return;
+  try {
+    const r = await api("POST", "/api/jobs/advice/run", { dry_run: dryRun });
+    toast(`${dryRun ? "Preview: would send" : "Queued"} ${n(r.sent)} advice SMS for ${n(r.farmers)} farmers (${n(r.recent)} already have this week's advice, ${n(r.no_advice)} between seasons).`);
+    refresh();
+  } catch (e) { toast(e.message, true); }
+}
+
+const LEVEL_LABEL = { rain: ["Heavy rain", "s-new"], dry: ["Hot & dry", "s-callback"], ok: ["OK", "s-answered"] };
+function renderWeather(list) {
+  const have = list.filter((w) => w.days.length);
+  $("#weatherTable").innerHTML = have.length
+    ? `<tr><th>County</th><th>Today</th><th>Rain next 3 days</th><th>Advice</th></tr>` +
+      have.sort((a, b) => (a.advice.level === "rain" ? 0 : 1) - (b.advice.level === "rain" ? 0 : 1) || a.county.localeCompare(b.county))
+        .map((w) => `<tr><td><b>${esc(w.county)}</b></td><td>${w.days[0].t_max}°C</td><td>${w.days.slice(0, 3).map((d) => d.rain_prob + "%").join(" · ")}</td><td><span class="status ${LEVEL_LABEL[w.advice.level][1]}">${LEVEL_LABEL[w.advice.level][0]}</span></td></tr>`).join("")
+    : '<tr><td class="empty">No forecasts yet. Click Refresh now (needs internet).</td></tr>';
+  const sample = have.some((w) => w.sample);
+  const fetched = have.map((w) => w.fetched_at).filter((t) => t !== "sample").sort().pop();
+  $("#weatherNote").textContent = sample ? "Sample forecast (demo data) until the server reaches Open-Meteo." : fetched ? `Open-Meteo, updated ${fetched.slice(0, 16).replace("T", " ")} UTC. Farmers in counties with heavy rain get an SMS alert (at most every 3 days).` : "";
+}
+
+let priceData = [], flaggedData = [], reporterData = [];
+function renderPrices(all = priceData, flagged = flaggedData, reporters = reporterData) {
+  priceData = all; flaggedData = flagged; reporterData = reporters;
+  const sel = $("#pMarket");
+  if (!sel.options.length) {
+    sel.innerHTML = all.map((m) => `<option value="${esc(m.market)}">${esc(m.market_name)}</option>`).join("");
+    $("#repMarket").innerHTML = sel.innerHTML;
+    sel.onchange = () => renderPrices(); // always the latest data, not the first one seen
+  }
+  const list = all.find((m) => m.market === sel.value) ?? all[0];
+  $("#priceTable").innerHTML = list?.items.length
+    ? `<tr><th>Item</th><th style="text-align:right">LRD</th><th style="text-align:right">Week</th><th>Reported</th></tr>` +
+      list.items.map((it) => `<tr><td>${esc(it.name)} <span class="muted">/${esc(it.unit)}</span></td><td class="num">${n(it.price_lrd)}</td><td class="num">${it.change_pct == null ? "–" : (it.change_pct > 0 ? "+" : "") + it.change_pct + "%"}</td><td>${ago(it.reported_at.replace("T", " ").slice(0, 19))} ago</td></tr>`).join("")
+    : '<tr><td class="empty">No prices this week for this market.</td></tr>';
+  $("#flagged").innerHTML = flagged?.length
+    ? `<p style="margin:10px 0 4px"><b>⚠ Unusual prices to check</b></p>` + flagged.map((p) => `<div class="answer" style="align-items:center"><span style="flex:1;font-size:13.5px">${esc(p.item_name)} at ${esc(p.market_name)}: <b>${n(p.price_lrd)} LRD</b> <span class="muted">(${esc(p.reporter ?? "")})</span></span><button class="act" onclick="setPrice(${p.id},'ok')">Accept</button><button class="act ghost" onclick="setPrice(${p.id},'rejected')">Reject</button></div>`).join("")
+    : "";
+  if (reporters) $("#repCount").textContent = reporters.length;
+}
+
+async function refreshWeather() {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  toast("Fetching forecasts for 15 counties…");
+  try {
+    const r = await api("POST", "/api/jobs/weather/run", {});
+    toast(r.failed.length ? `Updated ${r.updated} counties; ${r.failed.length} failed (no internet?).` : `Updated all ${r.updated} counties.` + (r.alerts.length ? ` Rain alerts sent in ${r.alerts.length} county(ies).` : ""), r.failed.length > 0);
+    refresh();
+  } catch (e) { toast(e.message, true); }
+}
+async function setPrice(id, status) {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  try { await api("PATCH", `/api/prices/${id}`, { status }); toast(status === "ok" ? "Price accepted: farmers can see it." : "Price rejected."); refresh(); } catch (e) { toast(e.message, true); }
+}
+async function addReporterForm() {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  try {
+    const r = await api("POST", "/api/reporters", { phone: $("#repPhone").value, name: $("#repName").value, market: $("#repMarket").value });
+    toast(`${r.phone} can now report prices for ${$("#repMarket").selectedOptions[0].text}.`);
+    $("#repPhone").value = ""; $("#repName").value = ""; refresh();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------------- data loading ----------------
+async function refresh() {
+  if (!live) return;
+  try {
+    const [stats, hotspots, reports, questions, broadcasts, jobs, weather, prices, flagged, reporters] = await Promise.all([
+      api("GET", "/api/stats"), api("GET", "/api/hotspots"), api("GET", "/api/pest-reports?limit=25"),
+      api("GET", "/api/questions?limit=25"), api("GET", "/api/broadcasts"), api("GET", "/api/jobs"),
+      api("GET", "/api/weather"), api("GET", "/api/prices"), api("GET", "/api/prices/flagged"), api("GET", "/api/reporters")
+    ]);
+    renderWeather(weather); renderPrices(prices, flagged, reporters);
+    $("#login").style.display = "none";
+    renderStats(stats); renderHotspots(hotspots); renderReports(reports); renderQuestions(questions); renderBroadcasts(broadcasts); renderJobs(jobs);
+  } catch (e) { if (e.message !== "Officer login required") console.error(e); }
+}
+
+function demo() {
+  const total = DASH.byCounty.reduce((a, b) => a + b[1], 0);
+  renderStats({
+    farmers: total, farmers_new_30d: 640, sms_sent: 48915, reports_to_check: 21, pest_reports_7d: 21, open_questions: 37, hotspots: 3, counties_flagged: 2,
+    by_county: DASH.byCounty.map(([county, farmers]) => ({ county, farmers })),
+    by_channel: [["ussd", 41], ["sms", 27], ["assisted", 18], ["app", 14]].map(([channel, p]) => ({ channel, farmers: p }))
+  });
+  const level = { High: "Outbreak", Medium: "Warning", Low: "Watch" };
+  renderHotspots(DASH.outbreaks.map((o) => ({ pest_name: o.pest, county: o.county, reports: o.reports, level: level[o.level] })));
+  names.pests = Object.fromEntries(PESTS.map((p) => [p.id, p.name]));
+  renderReports([
+    { id: 2291, county: "Nimba", crop: "maize", suggested_pest: "faw", match_score: 92, channel: "ussd", status: "new" },
+    { id: 2290, county: "Lofa", crop: "rice", suggested_pest: "blast", match_score: 78, channel: "app", status: "new" },
+    { id: 2288, county: "Bong", crop: "cassava", suggested_pest: "cmd", match_score: 100, channel: "ussd", status: "verified" }
+  ]);
+  renderQuestions(DASH.questions.map((q, i) => ({ id: i, phone: q.farmer, county: q.county, channel: "sms", kind: "text", body: q.q, status: q.status === "Answered" ? "answered" : "open" })));
+  renderBroadcasts([]);
+  renderWeather(COUNTIES.slice(0, 6).map((county, i) => ({ county, sample: true, days: WEATHER.map((w, d) => ({ t_max: w.hi, rain_prob: i % 3 ? Math.max(5, w.rain - 50) : w.rain })), advice: { level: i % 3 ? "ok" : "rain" } })));
+  renderPrices(MARKETS.map((name, mi) => ({ market: "m" + mi, market_name: name, items: PRICES.filter((p) => p.prices[mi]).map((p) => ({ name: p.item, unit: p.unit, price_lrd: p.prices[mi], change_pct: p.change, reported_at: new Date().toISOString() })) })), [], []);
+  $("#jobInfo").innerHTML = "Crop-stage advice goes out <b>every day at 07:00</b>. SMS provider: sample data.";
+}
+
+(async () => {
+  $("#bCounty").innerHTML += COUNTIES.map((c) => `<option>${esc(c)}</option>`).join("");
+  if (API) { try { live = (await fetch(API + "/health")).ok; } catch {} }
+  $("#mode").className = "mode " + (live ? "live" : "demo");
+  $("#mode").textContent = live ? "● LIVE data" : "● DEMO: sample data (start the API for live data)";
+  $("#footnote").textContent = live ? "Live data from the AgriConnect API. Updates every 5 seconds." : "Prototype: all numbers are sample data.";
+  if (live) {
+    try {
+      const [crops, pests] = await Promise.all([api("GET", "/api/content/crops"), api("GET", "/api/content/pests")]);
+      names.crops = Object.fromEntries(crops.map((c) => [c.id, c.name]));
+      names.pests = Object.fromEntries(pests.pests.map((p) => [p.id, p.name]));
+      $("#bCrop").innerHTML += crops.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+    } catch {}
+    await refresh();
+    setInterval(refresh, 5000);
+  } else {
+    $("#bCrop").innerHTML += Object.keys(CROP_GUIDES).map((c) => `<option>${esc(c)}</option>`).join("");
+    demo();
+  }
+  $("#bCounty").onchange = updatePreview; $("#bCrop").onchange = updatePreview; $("#bMsg").oninput = updatePreview;
+  updatePreview();
+})();
 </script>
 </body>
 </html>

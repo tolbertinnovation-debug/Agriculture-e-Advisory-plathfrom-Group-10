@@ -1,0 +1,45 @@
+{
+  "id": "cassava",
+  "name": "Cassava",
+  "menu_order": 2,
+  "status": "draft",
+  "reviewed_by": null,
+  "note": "DRAFT for the hackathon. Must be reviewed by a CARI / MOA agronomist before use with farmers.",
+  "stages": [
+    {
+      "id": "land-prep",
+      "name": "Land preparation and cuttings",
+      "from_week": -6,
+      "to_week": -1,
+      "sms": { "en": "CASSAVA: Prepare mounds or ridges. Choose stems only from healthy plants with no yellow twisted leaves. Dial *347# for help" }
+    },
+    {
+      "id": "planting",
+      "name": "Planting",
+      "from_week": 0,
+      "to_week": 1,
+      "sms": { "en": "CASSAVA: Plant 25 cm cuttings at an angle, about 1 m apart. Plant at the start of the rains. Dial *347# for help" }
+    },
+    {
+      "id": "early-weeding",
+      "name": "Early weeding",
+      "from_week": 2,
+      "to_week": 12,
+      "sms": { "en": "CASSAVA: Keep the field clean of weeds until the leaves cover the ground. Report yellow twisted leaves: *347# option 4" }
+    },
+    {
+      "id": "growth",
+      "name": "Growth and field check",
+      "from_week": 13,
+      "to_week": 35,
+      "sms": { "en": "CASSAVA: Pull out and burn plants with yellow twisted leaves so the sickness does not spread. Dial *347# for help" }
+    },
+    {
+      "id": "harvest",
+      "name": "Harvest and processing",
+      "from_week": 36,
+      "to_week": 72,
+      "sms": { "en": "CASSAVA: Harvest as you need it. Process into gari or fufu within 2 days so it does not spoil. *347# for prices" }
+    }
+  ]
+}

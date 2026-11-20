@@ -5,21 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AgriConnect USSD Simulator</title>
 <style>
-  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #DCD6C6; font-family: "Segoe UI", Roboto, Arial, sans-serif; }
-  .wrap { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; justify-content: center; padding: 24px; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #DCD6C6; font-family: "Segoe UI", Roboto, Arial, sans-serif; color: #17241B; }
+  .wrap { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; justify-content: center; padding: 24px; }
   .feature { width: 300px; background: #2B2B2B; border-radius: 40px 40px 60px 60px; padding: 26px 22px 30px; box-shadow: 0 30px 60px rgba(0,0,0,.3); }
   .brand { color: #aaa; text-align: center; font-size: 12px; letter-spacing: .2em; margin-bottom: 10px; }
-  .screen { background: #B9CFA4; border-radius: 6px; height: 260px; padding: 12px; font-family: "Courier New", monospace; font-size: 15px; color: #1C2A12; white-space: pre-wrap; overflow: hidden; border: 4px solid #1a1a1a; line-height: 1.3; }
+  .screen { background: #B9CFA4; border-radius: 6px; height: 260px; padding: 12px; font-family: "Courier New", monospace; font-size: 14.5px; color: #1C2A12; white-space: pre-wrap; overflow-y: auto; border: 4px solid #1a1a1a; line-height: 1.3; }
   .entry { margin-top: 10px; background: #fff; border-radius: 6px; display: flex; overflow: hidden; }
-  .entry input { flex: 1; border: 0; padding: 10px; font: 16px "Courier New", monospace; }
-  .entry button { border: 0; background: #1F4D2B; color: #fff; padding: 0 14px; font-weight: 700; }
+  .entry input { flex: 1; border: 0; padding: 10px; font: 16px "Courier New", monospace; min-width: 0; }
+  .entry button { border: 0; background: #1F4D2B; color: #fff; padding: 0 14px; font-weight: 700; cursor: pointer; }
   .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
   .keys button { background: #444; color: #fff; border: 0; border-radius: 14px; padding: 12px 0; font-size: 18px; font-weight: 700; cursor: pointer; }
   .keys button.call { background: #2E7D32; } .keys button.end { background: #B8322F; }
-  .side { max-width: 380px; background: #FFFDF8; border-radius: 16px; padding: 22px; color: #17241B; }
-  .side h1 { margin: 0 0 6px; font-size: 22px; color: #1F4D2B; }
-  .side code { background: #E3F0DF; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
-  .side li { margin-bottom: 6px; }
+  .panel { width: 360px; background: #FFFDF8; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .panel h1 { margin: 0; font-size: 21px; color: #1F4D2B; }
+  .panel h2 { margin: 6px 0 0; font-size: 15px; }
+  .panel code { background: #E3F0DF; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+  .mode { font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 8px; }
+  .mode.live { background: #E3F0DF; color: #1F4D2B; }
+  .mode.demo { background: #FBF0D3; color: #7A5A0B; }
+  label { font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 4px; }
+  .panel input, .panel select { font: inherit; padding: 8px; border-radius: 8px; border: 1px solid #DDE3DA; }
+  .row { display: flex; gap: 8px; }
+  .row input { flex: 1; min-width: 0; }
+  .row button, .small-btn { border: 0; border-radius: 8px; background: #1F4D2B; color: #fff; font-weight: 700; padding: 8px 12px; cursor: pointer; }
+  .inbox { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+  .msg { font-size: 13.5px; padding: 8px 10px; border-radius: 10px; line-height: 1.35; }
+  .msg.out { background: #EEF3EA; border: 1px solid #D5E3CD; }
+  .msg.in { background: #1F4D2B; color: #fff; align-self: flex-end; max-width: 85%; }
+  .msg time { display: block; font-size: 11px; opacity: .65; margin-top: 2px; }
+  .muted { color: #5B6B60; font-size: 13px; margin: 0; }
+  ul { margin: 0; padding-left: 18px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -30,18 +45,98 @@
     <div class="entry"><input id="inp" inputmode="numeric" placeholder="Reply…" onkeydown="if(event.key==='Enter')send()"><button onclick="send()">SEND</button></div>
     <div class="keys" id="keys"></div>
   </div>
-  <div class="side">
-    <h1>Dial <code>*347#</code> — no internet needed</h1>
-    <p>Most rural farmers in Liberia use basic phones. AgriConnect works on any phone through USSD menus, SMS alerts and voice calls.</p>
+
+  <div class="panel">
+    <h1>Dial <code>*347#</code></h1>
+    <span class="mode" id="mode"></span>
+    <label>This phone’s number
+      <div class="row">
+        <input id="phone" value="0777 000 111">
+        <button class="small-btn" onclick="newNumber()" title="Use a fresh number to test registration">New</button>
+      </div>
+    </label>
     <ul>
-      <li>Type <b>*347#</b> and press SEND (or the green key).</li>
-      <li>Reply with a menu number.</li>
-      <li><b>0</b> = back, <b>00</b> = main menu.</li>
+      <li>Type <b>*347#</b> and press SEND (or 📞).</li>
+      <li>Reply with a menu number. <b>0</b> = back, <b>00</b> = main menu.</li>
     </ul>
-    <p style="font-size:13px;color:#5B6B60">Short code shown is a placeholder; the real code is assigned by the telecom operators (Lonestar Cell MTN / Orange Liberia).</p>
+    <h2>📩 SMS on this phone</h2>
+    <div class="inbox" id="inbox"><p class="muted">No messages yet.</p></div>
+    <div id="smsBox">
+      <label>Send an SMS to AgriConnect (try HELP, ASK …, STOP, START)
+        <div class="row"><input id="smsText" placeholder="ASK my pepper leaves are yellow" onkeydown="if(event.key==='Enter')sendSms()"><button onclick="sendSms()">Send</button></div>
+      </label>
+    </div>
+    <p class="muted">The short code is a placeholder until it is registered with Lonestar Cell MTN / Orange Liberia.</p>
   </div>
 </div>
+
 <script>
+// ---------------------------------------------------------------------------
+// Two modes:
+//  LIVE  - this page is served by the AgriConnect API (npm run dev, then open
+//          http://localhost:3000/prototype/ussd.html) or opened with ?api=<url>.
+//          Every key press goes to POST /ussd exactly like a telco gateway would.
+//  DEMO  - opened as a plain file with no server: a built-in offline menu.
+// ---------------------------------------------------------------------------
+const params = new URLSearchParams(location.search);
+let API = params.get("api") || (location.protocol.startsWith("http") ? location.origin : null);
+let live = false;
+
+const $ = (id) => document.getElementById(id);
+const screen = $("screen");
+let sessionInputs = null; // null = idle; array = in a USSD session
+let sessionId = null;
+
+function show(t) { screen.textContent = t; screen.scrollTop = 0; }
+function idle() { sessionInputs = null; show("Lonestar\n\n\n   Dial *347#\n   for AgriConnect"); }
+
+async function detectApi() {
+  if (!API) return false;
+  try { const r = await fetch(API + "/health"); return r.ok; } catch { return false; }
+}
+
+// ---------- LIVE mode ----------
+async function liveStep(text) {
+  const res = await fetch(API + "/ussd", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ sessionId, serviceCode: "*347#", phoneNumber: $("phone").value, text })
+  });
+  const body = await res.text();
+  const ended = body.startsWith("END");
+  show(body.replace(/^(CON|END) /, "") + (ended ? "\n\n[session ended]" : ""));
+  if (ended) sessionInputs = null;
+  setTimeout(loadInbox, 300);
+}
+
+async function loadInbox() {
+  if (!live) return;
+  try {
+    const res = await fetch(API + "/api/messages?phone=" + encodeURIComponent($("phone").value));
+    if (!res.ok) return;
+    const msgs = await res.json();
+    $("inbox").innerHTML = msgs.length
+      ? msgs.map((m) => `<div class="msg ${m.direction === "out" ? "out" : "in"}">${escapeHtml(m.body)}<time>${m.direction === "out" ? `From AgriConnect · ${m.status}` : "You"} · ${m.created_at.slice(11, 16)}</time></div>`).join("")
+      : '<p class="muted">No messages yet.</p>';
+  } catch {}
+}
+
+async function sendSms() {
+  const text = $("smsText").value.trim();
+  if (!text || !live) return;
+  $("smsText").value = "";
+  await fetch(API + "/sms/inbound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from: $("phone").value, text }) });
+  loadInbox();
+}
+
+function newNumber() {
+  $("phone").value = "0777 " + String(Math.floor(100000 + Math.random() * 899999)).replace(/(\d{3})(\d{3})/, "$1 $2");
+  idle(); loadInbox();
+}
+
+const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---------- DEMO mode (offline, no server) ----------
 const MENU = {
   root: { text: "AgriConnect Liberia\n1. Crop advice\n2. Weather\n3. Market prices\n4. Report pest/disease\n5. Ask an expert\n6. My profile", next: { 1: "crop", 2: "weather", 3: "market", 4: "pest", 5: "ask", 6: "profile" } },
   crop: { text: "Choose crop:\n1. Rice\n2. Cassava\n3. Cocoa\n4. Vegetables\n0. Back", next: { 1: "rice", 2: "cassava", 3: "cocoa", 4: "veg" } },
@@ -61,30 +156,50 @@ const MENU = {
   sms: { text: "SMS sent to your phone. Free of charge.\n\n00. Main menu", next: {} }
 };
 let stack = [];
-const screen = document.getElementById("screen");
-function show(t) { screen.textContent = t; }
-function idle() { stack = []; show("Lonestar\n\n\n   Dial *347#\n   for AgriConnect"); }
-function send(v) {
-  const inp = document.getElementById("inp");
-  const val = (v ?? inp.value).trim(); inp.value = "";
-  if (!stack.length) { if (val === "*347#") { stack = ["root"]; show(MENU.root.text); } else show("Unknown code.\nDial *347#"); return; }
-  if (val === "00") { stack = ["root"]; return show(MENU.root.text); }
-  if (val === "0") { if (stack.length > 1) stack.pop(); return show(MENU[stack.at(-1)].text); }
-  const nxt = MENU[stack.at(-1)].next[val];
-  if (nxt) { stack.push(nxt); show(MENU[nxt].text); } else show("Invalid choice.\n\n" + MENU[stack.at(-1)].text);
+function demoStep(val) {
+  if (!stack.length) stack = ["root"];
+  else if (val === "00") stack = ["root"];
+  else if (val === "0") { if (stack.length > 1) stack.pop(); }
+  else { const nxt = MENU[stack.at(-1)].next[val]; if (nxt) stack.push(nxt); else return show("Invalid choice.\n\n" + MENU[stack.at(-1)].text); }
+  show(MENU[stack.at(-1)].text);
 }
-const keys = document.getElementById("keys");
-["1","2","3","4","5","6","7","8","9","*","0","#"].forEach(k => {
+
+// ---------- shared ----------
+async function send(v) {
+  const inp = $("inp");
+  const val = (v ?? inp.value).trim(); inp.value = "";
+  if (sessionInputs === null || val === "*347#") { // dialling again always starts a new session, like a real phone
+    if (val !== "*347#") return show("Unknown code.\nDial *347#");
+    sessionInputs = []; sessionId = "sim-" + Date.now(); stack = [];
+    return live ? liveStep("") : demoStep(null);
+  }
+  if (!val) return;
+  sessionInputs.push(val);
+  return live ? liveStep(sessionInputs.join("*")) : demoStep(val);
+}
+
+const keys = $("keys");
+["1","2","3","4","5","6","7","8","9","*","0","#"].forEach((k) => {
   const b = document.createElement("button"); b.textContent = k;
-  b.onclick = () => document.getElementById("inp").value += k; keys.appendChild(b);
+  b.onclick = () => ($("inp").value += k); keys.appendChild(b);
 });
 const call = document.createElement("button"); call.textContent = "📞"; call.className = "call"; call.onclick = () => send();
-const end = document.createElement("button"); end.textContent = "✖"; end.className = "end"; end.onclick = idle;
-const clr = document.createElement("button"); clr.textContent = "⌫"; clr.onclick = () => { const i = document.getElementById("inp"); i.value = i.value.slice(0, -1); };
-keys.append(call, clr, end);
-const demo = new URLSearchParams(location.search).get("demo");
-idle();
-if (demo) { send("*347#"); demo.split(",").forEach(d => send(d)); }
+const clr = document.createElement("button"); clr.textContent = "⌫"; clr.onclick = () => { const i = $("inp"); i.value = i.value.slice(0, -1); };
+const endKey = document.createElement("button"); endKey.textContent = "✖"; endKey.className = "end"; endKey.onclick = idle;
+keys.append(call, clr, endKey);
+$("phone").addEventListener("change", () => { idle(); loadInbox(); });
+
+(async () => {
+  idle();
+  live = await detectApi();
+  $("mode").className = "mode " + (live ? "live" : "demo");
+  $("mode").textContent = live ? "● LIVE: connected to the AgriConnect API at " + API : "● DEMO: offline menus (start the API to go live)";
+  $("smsBox").style.display = live ? "" : "none";
+  if (live) { loadInbox(); setInterval(loadInbox, 3000); }
+  // ?demo=4,1 replays key presses (used for screenshots)
+  const demo = params.get("demo");
+  if (demo !== null) { await send("*347#"); for (const d of demo.split(",").filter(Boolean)) await send(d); }
+})();
 </script>
 </body>
 </html>

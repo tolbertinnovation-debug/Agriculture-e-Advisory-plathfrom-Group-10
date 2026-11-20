@@ -1,0 +1,134 @@
+{
+  "status": "draft",
+  "note": "DRAFT symptom table for the hackathon. Must be reviewed by a CARI / MOA agronomist. Symptom codes are shared by the app and USSD menus.",
+  "symptoms": {
+    "holes": "Holes in leaves",
+    "caterpillar": "Caterpillars / worms",
+    "frass": "Sawdust-like droppings",
+    "yellow": "Yellow patches on leaves",
+    "twisted": "Leaves twisted / small",
+    "brown": "Brown or black spots",
+    "rot": "Fruit / pod rotting",
+    "spots": "Diamond-shaped spots",
+    "neck": "Rice neck turns brown and breaks"
+  },
+  "pests": [
+    {
+      "id": "fall-armyworm",
+      "name": "Fall armyworm",
+      "crops": [
+        "maize",
+        "rice"
+      ],
+      "symptoms": [
+        "holes",
+        "caterpillar",
+        "frass"
+      ],
+      "sms": {
+        "en": "Likely FALL ARMYWORM. 1) Check 20 plants. 2) Pick & crush worms in the morning. 3) Put ash or sand in the funnel. Officer told."
+      }
+    },
+    {
+      "id": "cassava-mosaic",
+      "name": "Cassava mosaic disease",
+      "crops": [
+        "cassava"
+      ],
+      "symptoms": [
+        "yellow",
+        "twisted"
+      ],
+      "sms": {
+        "en": "Likely CASSAVA MOSAIC. 1) Pull out & burn sick plants. 2) Never plant stems from sick plants. 3) Ask for clean stems. Officer told."
+      }
+    },
+    {
+      "id": "cocoa-black-pod",
+      "name": "Cocoa black pod",
+      "crops": [
+        "cocoa"
+      ],
+      "symptoms": [
+        "brown",
+        "rot"
+      ],
+      "sms": {
+        "en": "Likely BLACK POD. 1) Remove sick pods every 2 weeks & bury them. 2) Prune for air & light. 3) Harvest ripe pods often. Officer told."
+      }
+    },
+    {
+      "id": "rice-blast",
+      "name": "Rice blast",
+      "crops": [
+        "rice"
+      ],
+      "symptoms": [
+        "spots",
+        "brown",
+        "neck"
+      ],
+      "sms": {
+        "en": "Likely RICE BLAST. 1) Don't add more urea. 2) Burn sick straw after harvest. 3) Use resistant seed next season. Officer told."
+      }
+    }
+  ],
+  "ussd_symptoms": [
+    {
+      "label": "Worms eating leaves",
+      "symptoms": [
+        "caterpillar",
+        "holes"
+      ]
+    },
+    {
+      "label": "Yellow twisted leaves",
+      "symptoms": [
+        "yellow",
+        "twisted"
+      ]
+    },
+    {
+      "label": "Spots on leaves",
+      "symptoms": [
+        "spots",
+        "brown"
+      ]
+    },
+    {
+      "label": "Pods or fruit rotting",
+      "symptoms": [
+        "rot",
+        "brown"
+      ]
+    },
+    {
+      "label": "Holes in leaves only",
+      "symptoms": [
+        "holes"
+      ]
+    }
+  ],
+  "report_crops": [
+    {
+      "id": "rice",
+      "label": "Rice"
+    },
+    {
+      "id": "cassava",
+      "label": "Cassava"
+    },
+    {
+      "id": "cocoa",
+      "label": "Cocoa"
+    },
+    {
+      "id": "maize",
+      "label": "Maize (corn)"
+    },
+    {
+      "id": "other",
+      "label": "Other crop"
+    }
+  ]
+}
