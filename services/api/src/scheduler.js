@@ -6,6 +6,7 @@
 //   - never more than WEEKLY_CAP advice messages in 7 days per farmer;
 //   - never to farmers who said STOP; nothing between seasons.
 // Liberia uses GMT all year, so UTC times are local times.
+import { runFeedbackJob, feedbackRunDue } from "./fieldTest.js";
 import { adviceForFarmer } from "./engine.js";
 import { sendSms, deliverQueued, requeueStuck } from "./messaging.js";
 import { getFarmer } from "./farmers.js";
@@ -143,6 +144,10 @@ export async function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs 
         if (scheduler && (await adviceRunDue(ctx.db, ctx.now(), adviceHour))) {
           const s = await runAdviceJob(ctx, { trigger: "schedule" });
           log.log(`Daily advice: ${s.sent} queued for ${s.farmers} farmers (${s.recent} already had it, ${s.cap} over the weekly limit).`);
+        }
+        if (scheduler && (await feedbackRunDue(ctx.db, ctx.now(), adviceHour))) {
+          const f = await runFeedbackJob(ctx);
+          if (f.asked) log.log(`"Did it help?" SMS sent about ${f.asked} pest report(s).`);
         }
       } catch (err) {
         await recordError(ctx.db, err, { job: "advice" });

@@ -3,6 +3,7 @@
 //   START         turn advice back on
 //   HELP          how to use AgriConnect
 //   YES / NO      answer an invitation from an officer or lead farmer (assisted sign-up)
+//   1 / 2         answer "Did our advice help?" (also YES / NO from registered farmers)
 //   ASK <text>    send a question to an extension officer
 //   WEATHER       the forecast and farm advice for the farmer's county
 //   PRICES <mkt>  latest market prices (e.g. PRICES GBARNGA)
@@ -15,6 +16,7 @@ import { logInbound, sendSms } from "./messaging.js";
 import { answerRegistration } from "./registrations.js";
 import { getForecast } from "./weather.js";
 import { recordPrice, latestPrices, findMarket, getReporter, priceText } from "./prices.js";
+import { parseFeedback, answerFeedback } from "./fieldTest.js";
 
 const HELP =
   "AgriConnect: dial *347# for advice. SMS: ASK + question, WEATHER, PRICES GBARNGA. Reply STOP to stop. All free.";
@@ -37,7 +39,19 @@ export async function handleInboundSms(ctx, { from, text }) {
     if (answer.status !== "none") return { ok: true, reply: answer.status, registration: answer.status };
   }
 
-  if (word === "STOP") {
+  // Answer to "Did our advice help? Reply 1 = Yes, 2 = No".
+  const feedback = farmer ? parseFeedback(body) : null;
+  const fb = feedback ? await answerFeedback(db, phone, feedback, ctx.now()) : null;
+
+  if (fb) {
+    if (feedback === "yes") reply = "Thank you! We are glad it helped. Dial *347# anytime for more advice.";
+    else {
+      // The problem is still there: an officer should call the farmer.
+      const pest = ctx.content.pests.find((p) => p.id === fb.pest)?.name;
+      const q = await createQuestion(db, { farmer, phone, kind: "callback", channel: "sms", body: `Advice for PR-${fb.report_id}${pest ? ` (${pest})` : ""} did not help. Please call.` });
+      reply = `Thank you for telling us. An officer in ${farmer.county} will call you to help. Ref Q-${q.id}.`;
+    }
+  } else if (word === "STOP") {
     if (farmer) await setOptedOut(db, farmer.id, true);
     reply = "You will not get AgriConnect advice by SMS any more. Reply START to turn it back on.";
   } else if (word === "START") {

@@ -9,7 +9,7 @@
 import { SMS_LIMIT } from "./content.js";
 
 export const MAX_ATTEMPTS = 3;
-export const KINDS = ["reply", "welcome", "advice", "broadcast", "alert", "weather"];
+export const KINDS = ["reply", "welcome", "advice", "broadcast", "alert", "weather", "feedback"];
 
 export class MessageTooLongError extends Error {}
 

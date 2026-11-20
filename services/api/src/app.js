@@ -23,6 +23,7 @@ import { audit, can, isAreaLimited, AccessError } from "./staff.js";
 import { createRegistration, listRegistrations, getRegistration, resendRegistration, cancelRegistration, mayManage } from "./registrations.js";
 import { securityHeaders, cors, rateLimit } from "./http.js";
 import { recordError, systemStatus, recentErrors, backupDatabase, listBackupFiles } from "./ops.js";
+import { signupFunnel, feedbackSummary, runFeedbackJob } from "./fieldTest.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROTOTYPE_DIR = resolve(HERE, "../../../prototype");
@@ -403,6 +404,22 @@ export function createApp({
   });
 
   // ---- Admin: system status, errors, backups ----
+  // ---- Field-test measures (MVP exit criteria) ----
+  // USSD sign-up completion has no county (people give up before choosing one), so it covers everyone.
+  app.get("/api/field-test", ...need("stats:read"), async (req, res) => {
+    const days = intParam(req.query.days, 30, 365) || 30;
+    res.json({
+      days,
+      ussd_signup: await signupFunnel(db, { days, now: now() }),
+      did_it_help: await feedbackSummary(db, content, { days, now: now(), counties: scopeCounties(req, req.query.county) })
+    });
+  });
+  app.post("/api/jobs/feedback/run", ...need("jobs:run"), async (req, res) => {
+    const result = await runFeedbackJob(ctx, { dryRun: req.body?.dry_run === true });
+    if (!result.dry_run) await audit(db, req.staff, "job.feedback", null, result);
+    res.json(result);
+  });
+
   app.get("/api/admin/status", ...need("audit:read"), async (req, res) => {
     res.json({ ...(await systemStatus(db, { now: now(), backupDir, smsProvider: providerName })), recent_errors: await recentErrors(db, 10) });
   });

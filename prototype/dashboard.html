@@ -60,6 +60,10 @@
   .field input { font: inherit; font-weight: 400; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
   .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .hide { display: none !important; }
+  .ft { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .ft .v { font-size: 34px; font-weight: 800; color: var(--forest); font-variant-numeric: tabular-nums; }
+  .ft .v.low { color: var(--red); }
+  .ft .l { font-size: 13px; font-weight: 700; }
   .filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
   .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
   tr.click { cursor: pointer; }
@@ -75,7 +79,7 @@
   .timeline { border-left: 3px solid var(--leaf-soft); padding-left: 12px; font-size: 13.5px; }
   .timeline .ev { padding: 6px 0 8px; border-bottom: 1px dashed var(--line); }
   .timeline .ev .when { color: var(--muted); font-size: 12px; }
-  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } aside.nav { display: none; } .kpis { grid-template-columns: 1fr 1fr; } .row, .dlg-body { grid-template-columns: 1fr; } .filters { grid-template-columns: 1fr 1fr; } main { padding: 16px; } }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } aside.nav { display: none; } .kpis { grid-template-columns: 1fr 1fr; } .row, .dlg-body, .ft { grid-template-columns: 1fr; } .filters { grid-template-columns: 1fr 1fr; } main { padding: 16px; } }
 </style>
 </head>
 <body class="dash">
@@ -91,6 +95,7 @@
     <a href="#advisory" data-perm="broadcasts:send">📣 Send advisory</a>
     <a href="#regRow" data-perm="registrations:create">📝 Register farmers</a>
     <a href="#farmers" data-perm="farmers:read">👩🏾‍🌾 Farmers</a>
+    <a href="#fieldTest" data-perm="stats:read">🧪 Field test</a>
     <a href="staff.html">🔐 Staff &amp; security</a>
     <a href="ussd.html">📱 USSD simulator</a>
   </aside>
@@ -121,6 +126,14 @@
         <button class="btn" onclick="registerFarmer()">Send invitation</button>
       </div>
       <div class="card" id="invites"><h3>Invitations <span class="muted">waiting for the farmer's YES</span></h3><div class="scroll"><table id="regTable"></table></div></div>
+    </div>
+
+    <div class="card" id="fieldTest">
+      <h3>🧪 Field test <span class="muted">last 30 days · MVP exit criteria</span></h3>
+      <div class="ft">
+        <div><div class="l">Finish signing up on *347#</div><div class="v" id="ftRate">–</div><div class="muted" id="ftNote"></div><div id="ftSteps" style="margin-top:8px"></div></div>
+        <div><div class="l">“Did it help?” after a pest report</div><div class="v" id="fbRate">–</div><div class="muted" id="fbNote"></div><div id="fbPests" style="margin-top:8px"></div></div>
+      </div>
     </div>
 
     <div class="row" id="overviewRow">
@@ -271,6 +284,7 @@ function applyRole() {
   show("#workRow", has("questions:read") || has("broadcasts:send"));
   show("#regRow", has("registrations:create"));
   show("#farmers", has("farmers:read"));
+  show("#fieldTest", has("stats:read"));
   show("#fExport", has("farmers:export"));
   show("#dlgEdit", has("farmers:edit"));
   document.querySelectorAll("aside.nav a[data-perm]").forEach((a) => a.classList.toggle("hide", !has(a.dataset.perm)));
@@ -431,6 +445,30 @@ async function exportFarmers() {
   } catch (e) { toast(e.message, true); }
 }
 
+// ---------------- field test (MVP exit criteria) ----------------
+const STEP_NAMES = { language: "Language", county: "County", crop: "Crop", month: "Planting month", consent: "Consent screen" };
+const pct = (x) => (x === null || x === undefined ? "–" : `${Math.round(x * 100)}%`);
+function renderFieldTest(ft) {
+  const u = ft.ussd_signup, f = ft.did_it_help;
+  $("#ftRate").textContent = pct(u.completion_rate);
+  $("#ftRate").classList.toggle("low", u.completion_rate !== null && !u.meets_target);
+  const finished = u.registered + u.cancelled + u.abandoned;
+  $("#ftNote").innerHTML = finished
+    ? `${n(u.registered)} of ${n(finished)} finished · target ${pct(u.target)} ${u.meets_target ? "✓" : "✗"}${u.in_progress ? ` · ${n(u.in_progress)} dialling now` : ""}`
+    : "No one has tried to sign up on *347# yet.";
+  const quit = Object.entries(u.gave_up_at).filter(([, k]) => k > 0);
+  const max = Math.max(1, ...quit.map(([, k]) => k));
+  $("#ftSteps").innerHTML = quit.length
+    ? '<div class="muted" style="font-size:12px;margin-bottom:2px">Where people stopped:</div>' + quit.map(([step, k]) => `<div class="bar"><span>${esc(STEP_NAMES[step] ?? step)}</span><div class="track"><i style="width:${(100 * k) / max}%;background:var(--gold)"></i></div><b>${n(k)}</b></div>`).join("")
+    : "";
+  $("#fbRate").textContent = pct(f.helped_rate);
+  $("#fbRate").classList.toggle("low", f.helped_rate !== null && f.helped_rate < 0.6);
+  $("#fbNote").innerHTML = f.asked
+    ? `${n(f.yes)} yes · ${n(f.no)} no (an officer calls back) · ${n(f.answered)} of ${n(f.asked)} answered`
+    : "Asked by SMS 3 days after a pest report. No answers yet.";
+  $("#fbPests").innerHTML = f.by_pest.filter((p) => p.answered).map((p) => `<div class="bar"><span>${esc(p.pest_name)}</span><div class="track"><i style="width:${100 * p.helped_rate}%"></i></div><b>${pct(p.helped_rate)}</b></div>`).join("");
+}
+
 // ---------------- rendering (same for live and demo) ----------------
 function renderStats(s) {
   $("#kpis").innerHTML = [
@@ -479,7 +517,7 @@ function renderQuestions(list) {
     ? `<tr><th>Farmer</th><th>Question</th><th>Age</th><th>Status</th></tr>` +
       list.map((q) => {
         const isCallback = q.kind === "callback";
-        const text = isCallback ? "📞 Wants a call-back" : esc(q.body);
+        const text = isCallback ? "📞 Wants a call-back" + (q.body ? `<div class="muted">${esc(q.body)}</div>` : "") : esc(q.body);
         const action = q.status !== "open" ? (q.answer ? `<div class="muted">↳ ${esc(q.answer)}</div>` : "")
           : isCallback
             ? `<div class="answer"><button class="act" onclick="answer(${q.id}, true)">Mark as called</button></div>`
@@ -638,6 +676,7 @@ async function refresh() {
     // Only ask for what this role may see.
     const get = (perm, path) => (has(perm) ? api("GET", path) : Promise.resolve(null));
     const regs = has("registrations:read") ? api("GET", "/api/registrations?limit=30") : Promise.resolve(null);
+    const fieldTest = get("stats:read", "/api/field-test");
     const [stats, hotspots, reports, questions, broadcasts, jobs, weather, prices, flagged, reporters] = await Promise.all([
       get("stats:read", "/api/stats"), get("hotspots:read", "/api/hotspots"), get("reports:read", "/api/pest-reports?limit=25"),
       get("questions:read", "/api/questions?limit=25"), get("broadcasts:read", "/api/broadcasts"), get("jobs:read", "/api/jobs"),
@@ -648,6 +687,8 @@ async function refresh() {
     const registrations = await regs;
     if (registrations) renderRegistrations(registrations);
     if (stats) renderStats(stats);
+    const ft = await fieldTest;
+    if (ft) renderFieldTest(ft);
     if (hotspots) renderHotspots(hotspots);
     if (reports) renderReports(reports);
     if (questions) renderQuestions(questions);
@@ -676,6 +717,10 @@ function demo() {
   renderCropPicker([["rice", "Rice (upland)"], ["cassava", "Cassava"]]);
   $("#rCounty").innerHTML = COUNTIES.map((c) => `<option>${esc(c)}</option>`).join("");
   $("#fCounty").innerHTML = '<option value="">All counties</option>' + COUNTIES.map((c) => `<option>${esc(c)}</option>`).join("");
+  renderFieldTest({
+    ussd_signup: { started: 52, registered: 41, cancelled: 3, abandoned: 6, in_progress: 2, completion_rate: 41 / 50, target: 0.8, meets_target: true, gave_up_at: { language: 1, county: 3, crop: 0, month: 2, consent: 3 } },
+    did_it_help: { asked: 38, answered: 29, yes: 23, no: 6, helped_rate: 23 / 29, by_pest: [{ pest_name: "Fall armyworm", answered: 17, helped_rate: 15 / 17 }, { pest_name: "Rice blast", answered: 8, helped_rate: 5 / 8 }, { pest_name: "Cassava mosaic disease", answered: 4, helped_rate: 3 / 4 }] }
+  });
   farmerTotal = 3;
   renderFarmers([
     { id: 1, name: "Kollie M.", phone: "+231770000001", county: "Bong", district: "Salala", channel: "ussd", crops: [{ crop: "rice", planting_month: 5 }, { crop: "cassava", planting_month: 4 }] },

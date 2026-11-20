@@ -24,6 +24,7 @@ import { getForecast, shortForecast } from "./weather.js";
 import { latestPrices, priceText } from "./prices.js";
 import { isUniqueViolation } from "./db.js";
 import { waitingRegistration, answerRegistration } from "./registrations.js";
+import { trackSignup, finishSignup } from "./fieldTest.js";
 
 export const USSD_MAX = 182;
 
@@ -64,6 +65,7 @@ export function normalizeInputs(text) {
 function session(answers) {
   let i = 0;
   return {
+    step: null, // which registration screen we are on (for the sign-up funnel)
     ask(prompt, parse) {
       let retry = "";
       for (;;) {
@@ -99,24 +101,32 @@ function askMonth(s, cropName) {
 
 async function register(ctx, s, phone) {
   const { db, content } = ctx;
+  s.step = "language";
   const language = s.choose("Choose language:", LANGUAGE_OPTIONS);
+  s.step = "county";
   const county = askCounty(s);
+  s.step = "crop";
 
   const cropList = [...content.crops.values()];
   const cropOptions = cropList.map((c) => ({ label: c.name, value: [c.id] }));
   if (cropList.length > 1) cropOptions.push({ label: "All of these", value: cropList.map((c) => c.id) });
   const cropIds = s.choose("Your main crop:", cropOptions);
 
+  s.step = "month";
   const crops = cropIds.map((id) => ({
     crop: id,
     planting_month: askMonth(s, content.crops.get(id).name)
   }));
 
+  s.step = "consent";
   const agree = s.choose("AgriConnect sends free farm advice by SMS. Your number stays private. Reply STOP anytime.", [
     { label: "I agree", value: "yes" },
     { label: "Cancel", value: "no" }
   ]);
-  if (agree !== "yes") return end("Registration cancelled. Dial *347# anytime to join.");
+  if (agree !== "yes") {
+    await finishSignup(db, phone, "cancelled", ctx.now());
+    return end("Registration cancelled. Dial *347# anytime to join.");
+  }
 
   let farmer;
   try {
@@ -126,6 +136,7 @@ async function register(ctx, s, phone) {
     if (isUniqueViolation(err)) return end("You are already registered. Dial *347# for the full menu.");
     throw err;
   }
+  await finishSignup(db, phone, "registered", ctx.now());
   await sendSms(db, {
     phone,
     farmerId: farmer.id,
@@ -295,7 +306,15 @@ export async function handleUssd(ctx, { phoneNumber, text }) {
         { label: "Report pest or disease", value: "pest" },
         { label: "Ask an expert", value: "ask" }
       ]);
-      if (choice === "register") return await register(ctx, s, phone);
+      if (choice === "register") {
+        try {
+          return await register(ctx, s, phone);
+        } catch (err) {
+          // Waiting on a registration screen: note how far this phone got.
+          if (err instanceof NeedInput && s.step) await trackSignup(ctx.db, phone, s.step, ctx.now());
+          throw err;
+        }
+      }
       if (choice === "pest") return await reportPest(ctx, s, phone, null);
       return await askExpert(ctx, s, phone, null);
     }

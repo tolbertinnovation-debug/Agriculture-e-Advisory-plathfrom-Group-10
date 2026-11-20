@@ -41,6 +41,10 @@ Everyone who uses the dashboard has their own account. `npm run seed` creates th
 
 **Assisted sign-up.** Officers and lead farmers register farmers on the dashboard (*Register a farmer*). The farmer gets an SMS and **joins only when they reply YES** (or answer the first `*347#` screen). NO, or no answer within 7 days, means nothing is kept. Invitations can be resent at most twice. Only admins can add farmers directly (`POST /api/farmers`, e.g. from signed paper forms).
 
+**Field-test measures** (dashboard card *Field test*, for the MVP exit criteria):
+- **Sign-up completion on `*347#`.** Every phone that starts registering is followed screen by screen. Finished ÷ (finished + cancelled + gave up) is the completion rate; the target is 80%. Someone silent for 10 minutes has given up, and the card shows at which screen (language, county, crop, planting month, consent). People dialling right now are not counted yet.
+- **"Did it help?"** Each day, with the advice job, farmers who reported a pest 3–10 days ago get one SMS: *Did our advice for Fall armyworm (PR-12) help? Reply 1 = Yes, 2 = No.* Only registered farmers who haven't said STOP, never about rejected reports, once per report and at most once a week per farmer. **2 (No) puts a call-back request in the officer's question queue**, so the farmer gets help. Answers are shown by pest, so the content team sees which advice works.
+
 **Farmers change their own crops** on `*347#` → 6 *My profile* → 2 *My crops & planting*: change a planting month, add a crop or remove one (they are asked to confirm first, and the last crop can't be removed). If a new crop stage is due, its advice is sent at once. The change appears in the farmer's history on the dashboard as "changed by the farmer on *347#".
 
 **Farmer management.** The dashboard's *Farmers* card searches by name, district or phone (type `0777 123` or `777123`), and filters by county, crop and STOP status. Click a farmer to see their whole history and to correct their name, district, county, language, crops and planting months; every change goes in the audit log with the old and new values. **Download CSV** gives the same list for the field-test log (Excel and Google Sheets open it; text that looks like a formula is made safe). Officers only find, change and export farmers in their own counties.
@@ -221,8 +225,9 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | GET 🔒 | `/api/pest-reports?county=&status=` | List reports for officers |
 | GET 🔒 | `/api/pest-reports/:id` | One report |
 | GET 🔒 | `/api/stats` | Numbers for the dashboard |
+| GET 🔒 | `/api/field-test?days=30` | Field-test measures: `*347#` sign-up completion (target 80%) with where people stopped, and "Did it help?" answers by pest |
 | POST | `/ussd` | USSD gateway webhook (`phoneNumber`, `text`) → `CON …` / `END …` |
-| POST | `/sms/inbound` | Incoming SMS (`from`, `text`): HELP, ASK, STOP, START |
+| POST | `/sms/inbound` | Incoming SMS (`from`, `text`): HELP, ASK, STOP, START, 1 / 2 (answers to "Did it help?") |
 | GET 🔒 | `/api/messages?phone=` | SMS log (admin only; one phone's inbox is open in development for the simulator) |
 | GET 🔒 | `/api/questions?county=&status=` | Questions and call-back requests for officers |
 | PATCH 🔒 | `/api/pest-reports/:id` | `{status: verified\|rejected\|closed, confirmed_pest}`; verifying SMSes the farmer |
@@ -233,6 +238,7 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | GET 🔒 | `/api/broadcasts` | Advisories already sent |
 | GET 🔒 | `/api/jobs` | Daily advice schedule, last runs, SMS queue counts |
 | POST 🔒 | `/api/jobs/advice/run` | `{dry_run: true}` to preview, `{}` to send due advice now |
+| POST 🔒 | `/api/jobs/feedback/run` | Send the "Did it help?" SMS now (`{dry_run: true}` to preview); it also runs daily with the advice job |
 | POST | `/sms/status` | Delivery reports from the SMS provider: `{id, status}` |
 | GET | `/api/weather?county=Bong` | Forecast + farm advice for a county (all counties without `county`) |
 | GET | `/api/markets` | Markets and price items |
