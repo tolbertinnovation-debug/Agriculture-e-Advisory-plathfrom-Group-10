@@ -1,0 +1,58 @@
+{
+  "id": "rice",
+  "name": "Rice (upland)",
+  "status": "draft",
+  "reviewed_by": null,
+  "note": "DRAFT for the hackathon. Must be reviewed by a CARI / MOA agronomist before use with farmers.",
+  "stages": [
+    {
+      "id": "land-prep",
+      "name": "Land preparation",
+      "from_week": -8,
+      "to_week": -1,
+      "sms": { "en": "RICE: Brush and clear your farm now. Avoid burning near the forest edge. Get certified seed ready before the rains. Dial *347# for help" }
+    },
+    {
+      "id": "planting",
+      "name": "Planting",
+      "from_week": 0,
+      "to_week": 1,
+      "sms": { "en": "RICE: Plant with the first steady rains. Use certified seed. Plant in lines so weeding is easier. Dial *347# for help" }
+    },
+    {
+      "id": "first-weeding",
+      "name": "First weeding",
+      "from_week": 2,
+      "to_week": 4,
+      "sms": { "en": "RICE: Do your first weeding now (week 3). Clean weeding early gives a bigger harvest. Dial *347# for help" }
+    },
+    {
+      "id": "second-weeding",
+      "name": "Second weeding",
+      "from_week": 5,
+      "to_week": 8,
+      "sms": { "en": "RICE: Do your second weeding now (week 6). Check leaves for spots or worms. Report pests: dial *347# option 4" }
+    },
+    {
+      "id": "flowering",
+      "name": "Flowering and grain filling",
+      "from_week": 9,
+      "to_week": 13,
+      "sms": { "en": "RICE: Grains are filling. Scare birds every morning and evening. Report brown neck or spots: dial *347# option 4" }
+    },
+    {
+      "id": "harvest",
+      "name": "Harvest and drying",
+      "from_week": 14,
+      "to_week": 18,
+      "sms": { "en": "RICE: Harvest when most grains are golden. Dry on tarpaulin, not bare ground. Dial *347# for market prices" }
+    },
+    {
+      "id": "storage",
+      "name": "Storage",
+      "from_week": 19,
+      "to_week": 26,
+      "sms": { "en": "RICE: Store dry rice in clean bags off the floor, away from rats. Keep the best seed for next season." }
+    }
+  ]
+}

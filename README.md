@@ -19,6 +19,16 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 
 > All prices, counts and forecasts in the prototype are **sample data**.
 
+## Run the API (step 1 of the build)
+```bash
+cd services/api
+npm install
+npm test        # 28 tests
+npm run seed    # demo farmers
+npm run dev     # http://localhost:3000/api/stats
+```
+Full guide: [docs/dev-setup.md](docs/dev-setup.md). Needs Node.js 22.13 or newer; no database to install.
+
 ## Pre-work documents
 1. [Frame the problem](docs/01-problem-framing.md)
 2. [Talk to real users: interview guide & notes](docs/02-user-interviews.md)

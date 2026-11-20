@@ -18,7 +18,7 @@ Prepare   →    Hackathon   →    MVP build        →    Pilot           → 
 |---|---|---|---|
 | 0.1 | Finish the pre-work: problem page, 2+ interviews, roles | Team lead | Shared in the team WhatsApp group |
 | 0.2 | Turn interview notes into 3–5 **design changes** | Researcher | Listed in `docs/02-user-interviews.md` |
-| 0.3 | Choose the stack: **Node.js or Python** (whichever most of the team knows) | Backend dev | Decision written in this file |
+| 0.3 | ✅ **Stack chosen: Node.js (Express) + SQLite for development, PostgreSQL before the pilot.** Reason: the prototype is already JavaScript, so the team uses one language end to end | Backend dev | Done |
 | 0.4 | Create a sandbox account with an SMS/USSD aggregator that covers Liberia, or plan to demo with the USSD simulator | Backend dev | Test SMS received on a team phone, or simulator ready |
 | 0.5 | Write the first content: rice and cassava × 6 stages, top 6 pests (English) | Content lead | Reviewed by an agronomist or extension officer |
 | 0.6 | Set up the repo: folders (below), README, issue labels, the backlog as GitHub issues | Team lead | Every Must story is an issue with an owner |
@@ -132,6 +132,17 @@ Work in **2-week sprints**. Each sprint ends with a demo to a farmer or officer 
 
 ## Budget headings (fill with real quotes)
 SMS and USSD traffic · voice minutes · hosting · phones for testing · translation and audio recording · field travel for registration and training · officer airtime and data.
+
+## Build progress
+
+| Step | What | Status |
+|---|---|---|
+| 1 | Foundation: API, database, content files, advisory engine, pest diagnosis, tests, CI (`services/api`, `content/`) | ✅ Done, see [dev-setup.md](dev-setup.md) |
+| 2 | USSD `*347#` and SMS: register + report pest, simulator connected to the real API | Next |
+| 3 | Officer dashboard connected: live reports, hotspots, broadcast | |
+| 4 | Weekly crop advice sent automatically (scheduler + message queue) | |
+| 5 | Farmer app connected to the API, offline sync | |
+| 6 | Ask an Expert, weather, market prices | |
 
 ## Next 7 days
 1. Turn every **Must** story in [backlog.md](backlog.md) into a GitHub issue with an owner.
