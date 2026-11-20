@@ -302,7 +302,7 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
   → crop → planting month            3 Market prices → market → prices → 1 Get by SMS
   → consent → welcome SMS            4 Report pest → what you see → crop → SMS reply + Ref
 2 Report pest (asks county)          5 Ask an expert → call-back request / how to ASK by SMS
-3 Ask an expert (asks county)        6 My profile → change language / stop or start SMS
+3 Ask an expert (asks county)        6 My profile → language / my crops & planting / stop or start SMS
 ```
 Menu wording lives in `services/api/src/ussd.js`; the pest symptoms and crops shown in the USSD menus live in `content/pests.json` (`ussd_symptoms`, `report_crops`). Every screen is tested to fit in 182 characters.
 
