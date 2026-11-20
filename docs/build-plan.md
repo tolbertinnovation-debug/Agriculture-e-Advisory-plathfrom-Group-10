@@ -141,8 +141,8 @@ SMS and USSD traffic · voice minutes · hosting · phones for testing · transl
 | 2 | USSD `*347#` and SMS: register, advice, report pest, ask expert, profile; SMS keywords HELP/ASK/STOP/START; simulator connected live | ✅ Done |
 | 3 | Officer dashboard connected: live reports with verify/reject, automatic hotspots, answer questions by SMS, broadcast by county and crop | ✅ Done |
 | 4 | Daily crop advice job (new stage, 28-day reminders, 3/week cap), SMS queue with retries and delivery reports, Africa's Talking and generic HTTP providers, webhook secret | ✅ Done |
-| 5 | Farmer app connected to the API, offline sync | Next |
-| 6 | Ask an Expert, weather, market prices | |
+| 5 | Farmer app (`apps/farmer`): SMS-code sign-in, registration, advice, county alerts, Pest Doctor and questions that work offline and sync without duplicates | ✅ Done |
+| 6 | Weather and market prices (Ask an Expert is done in steps 2–5) | Next |
 
 ## Next 7 days
 1. Turn every **Must** story in [backlog.md](backlog.md) into a GitHub issue with an owner.

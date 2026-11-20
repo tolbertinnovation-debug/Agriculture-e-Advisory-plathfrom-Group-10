@@ -13,7 +13,7 @@ npm install
 ```bash
 npm test
 ```
-You should see `# pass 71` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
+You should see `# pass 82` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
 
 ## 3. Add demo data and start the API
 ```bash
@@ -72,7 +72,24 @@ SMS_PROVIDER=africastalking AT_USERNAME=sandbox AT_API_KEY=your-key AT_SANDBOX=1
 - [ ] All content reviewed by an agronomist (`"status": "draft"` → `"approved"`)
 - [ ] HTTPS in front of the server, daily database backups
 
-## 7. Try the API directly
+## 7. The farmer smartphone app (step 5)
+Open **http://localhost:3000/app/**. To see it like a phone, open your browser's developer tools and use the phone view.
+
+1. Enter any Liberian number and tap **Send me a code**. In development the 6-digit code shows on screen, because nothing is really sent. With a real SMS provider it arrives by SMS only.
+2. Register: county, district, language, crops and planting months, and consent.
+3. **Home** shows pest alerts for your county, the officer's advisories and this week's advice for each crop.
+4. Turn on airplane mode, or in developer tools go to **Network → Offline**. Pest Doctor still works and gives the same diagnosis as the server, because it runs the same engine. The report and any question are saved on the phone ("Offline · 2 waiting").
+5. Close and reopen the app while offline: it still opens with your advice.
+6. Go back online: everything waiting is sent within seconds (or every 30 seconds), never twice. Answers from officers appear under **Ask**.
+
+How it works:
+- **Sign-in:** phone + one-time SMS code; no password. Codes expire after 10 minutes; 5 wrong tries lock a code; at most 3 codes per 15 minutes; sessions last 90 days.
+- **Offline:** the service worker (`apps/farmer/sw.js`) keeps the app itself on the phone. `app.js` keeps the farmer's data in the phone's storage, plus an outbox of reports and questions. Each item has a `client_id`, so a retried send is recognised and not duplicated.
+- **Security:** farmers can only see and change their own data. Registering someone else (`POST /api/farmers`) and filing reports for others (`POST /api/pest-reports`) are now officer-only.
+
+Install on a phone: when the API runs on a server with HTTPS, open `/app/` in Chrome on Android and choose **Add to Home screen**.
+
+## 8. Try the API directly
 Open these in your browser:
 - http://localhost:3000/health
 - http://localhost:3000/api/stats: farmers by county
@@ -112,14 +129,17 @@ services/api/
   src/broadcasts.js   officer advisories to many farmers (by county and crop, skips STOP)
   src/scheduler.js    daily crop advice job (stage changes, 28-day reminders, 3/week cap) + background sender
   src/providers/      SMS providers: log (development), africastalking, http
+  src/auth.js         farmer sign-in: SMS codes and sessions
+  src/farmerApi.js    farmer app API: /api/auth/*, /api/me/*
+apps/farmer/          the real farmer app (offline PWA): index.html, app.js, sw.js, styles.css
   src/db.js           database tables
   src/content.js      loads and checks /content
   scripts/seed.js     demo data
   test/               automated tests (node --test)
-prototype/            clickable demo screens (no server needed)
+prototype/            clickable demo screens for the pitch (no server needed)
 ```
 
-## API (steps 1–4)
+## API (steps 1–5)
 
 Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 
@@ -129,11 +149,11 @@ Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 | GET | `/api/counties` | Liberia's 15 counties |
 | GET | `/api/content/crops` | Crop calendars |
 | GET | `/api/content/pests` | Symptom codes and pests |
-| POST | `/api/farmers` | Register a farmer (needs `consent: true`) |
+| POST 🔒 | `/api/farmers` | Assisted registration by an officer (needs `consent: true`) |
 | GET 🔒 | `/api/farmers?county=Bong` | List farmers |
 | GET 🔒 | `/api/farmers/:id` | One farmer |
 | GET 🔒 | `/api/farmers/:id/advice` | This week's advice for each crop |
-| POST | `/api/pest-reports` | Report a pest; returns diagnosis + reply SMS |
+| POST 🔒 | `/api/pest-reports` | Report a pest for a farmer; returns diagnosis + reply SMS |
 | GET 🔒 | `/api/pest-reports?county=&status=` | List reports for officers |
 | GET 🔒 | `/api/pest-reports/:id` | One report |
 | GET 🔒 | `/api/stats` | Numbers for the dashboard |
@@ -150,6 +170,17 @@ Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 | GET 🔒 | `/api/jobs` | Daily advice schedule, last runs, SMS queue counts |
 | POST 🔒 | `/api/jobs/advice/run` | `{dry_run: true}` to preview, `{}` to send due advice now |
 | POST | `/sms/status` | Delivery reports from the SMS provider: `{id, status}` |
+| POST | `/api/auth/request-code` | `{phone}` → SMS with a 6-digit code (`dev_code` in the answer only when `SMS_PROVIDER=log`) |
+| POST | `/api/auth/verify` | `{phone, code}` → `{token, registered}` |
+| POST 👤 | `/api/auth/logout` | End this session |
+| GET 👤 | `/api/me` | Who am I, am I registered |
+| POST 👤 | `/api/me/register` | Register yourself (phone comes from the sign-in) |
+| PATCH 👤 | `/api/me` | `{language, sms: true/false}` |
+| GET 👤 | `/api/me/home` | Profile, this week's advice, county alerts, my reports and questions |
+| POST 👤 | `/api/me/reports` | `{crop, symptoms, client_id}`; same `client_id` twice = no duplicate |
+| POST 👤 | `/api/me/questions` | `{body, client_id}` |
+
+👤 = needs the farmer's sign-in token (`Authorization: Bearer <token>`).
 
 ## Settings (environment variables)
 | Name | Default | Meaning |

@@ -19,14 +19,20 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 
 > All prices, counts and forecasts in the prototype are **sample data**.
 
-## Run the API (steps 1–4 of the build)
+## Run the platform (steps 1–5 of the build)
 ```bash
 cd services/api
 npm install
-npm test        # 71 tests
+npm test        # 82 tests
 npm run seed    # demo farmers
-npm run dev     # then open http://localhost:3000/prototype/ussd.html
+npm run dev
 ```
+| Open | What |
+|---|---|
+| http://localhost:3000/app/ | **Farmer app**: sign in with an SMS code, works offline |
+| http://localhost:3000/prototype/ussd.html | Basic phone `*347#` simulator with SMS inbox |
+| http://localhost:3000/prototype/dashboard.html | Extension officer dashboard |
+
 The USSD simulator and the officer dashboard (`/prototype/dashboard.html`) go **LIVE** when the API is running: register farmers on `*347#`, report pests, watch the hotspot appear on the dashboard, then warn farmers and see the SMS arrive.
 Full guide: [docs/dev-setup.md](docs/dev-setup.md). Needs Node.js 22.13 or newer; no database to install.
 

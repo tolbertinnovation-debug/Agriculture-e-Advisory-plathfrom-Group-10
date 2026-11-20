@@ -15,8 +15,11 @@ import { runAdviceJob, lastJobRuns, nextAdviceRun } from "./scheduler.js";
 import { normalizePhone } from "./geo.js";
 import { handleUssd } from "./ussd.js";
 import { handleInboundSms } from "./smsInbound.js";
+import { farmerRoutes } from "./farmerApi.js";
 
-const PROTOTYPE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../prototype");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const PROTOTYPE_DIR = resolve(HERE, "../../../prototype");
+const FARMER_APP_DIR = resolve(HERE, "../../../apps/farmer");
 
 const intParam = (v, fallback, max) => {
   const n = Number.parseInt(v, 10);
@@ -80,7 +83,11 @@ export function createApp({
   // The clickable prototype, served by the API so the USSD simulator can talk to it:
   // http://localhost:3000/prototype/ussd.html
   app.use("/prototype", express.static(PROTOTYPE_DIR));
-  app.get("/", (req, res) => res.redirect("/prototype/ussd.html"));
+  // The real farmer app (offline-first PWA). It reuses the server's advisory engine
+  // for offline pest diagnosis, so the two can never disagree.
+  app.get("/app/engine.js", (req, res) => res.type("application/javascript").sendFile(resolve(HERE, "engine.js")));
+  app.use("/app", express.static(FARMER_APP_DIR));
+  app.get("/", (req, res) => res.redirect("/app/"));
 
   app.get("/health", (req, res) => res.json({ ok: true, service: "agriconnect-api", time: now().toISOString() }));
 
@@ -89,10 +96,11 @@ export function createApp({
   app.get("/api/content/crops", (req, res) =>
     res.json([...content.crops.values()].map(({ id, name, status, stages }) => ({ id, name, status, stages })))
   );
-  app.get("/api/content/pests", (req, res) => res.json({ symptoms: content.symptoms, pests: content.pests }));
+  app.get("/api/content/pests", (req, res) => res.json({ symptoms: content.symptoms, pests: content.pests, report_crops: content.reportCrops }));
 
   // ---- Farmers ----
-  app.post("/api/farmers", (req, res) => {
+  // Assisted registration by an officer. Farmers register themselves through USSD or the app (/api/me/register).
+  app.post("/api/farmers", officer, (req, res) => {
     const farmer = cleanFarmerInput(req.body ?? {}, content);
     try {
       res.status(201).json(createFarmer(db, farmer));
@@ -121,7 +129,7 @@ export function createApp({
   });
 
   // ---- Pest reports ----
-  app.post("/api/pest-reports", (req, res) => res.status(201).json(createPestReport(db, content, req.body ?? {})));
+  app.post("/api/pest-reports", officer, (req, res) => res.status(201).json(createPestReport(db, content, req.body ?? {})));
 
   app.get("/api/pest-reports", officer, (req, res) => {
     const county = req.query.county ? findCounty(req.query.county) : undefined;
@@ -227,12 +235,15 @@ export function createApp({
     });
   });
 
+  farmerRoutes(app, ctx, { exposeDevCode: providerName === "log" });
+
   app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
   // Errors: validation problems are 400 with a list; anything else is logged and hidden from the client.
   app.use((err, req, res, next) => {
     if (err.type === "entity.parse.failed") return res.status(400).json({ error: "Body must be valid JSON" });
     if (err.status === 400 && err.errors) return res.status(400).json({ error: "Invalid input", details: err.errors });
+    if (err.auth) return res.status(err.status).json({ error: err.message });
     console.error(err);
     res.status(500).json({ error: "Something went wrong" });
   });

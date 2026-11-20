@@ -105,6 +105,24 @@ CREATE TABLE IF NOT EXISTS job_runs (
   started_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Farmer app sign-in: one-time codes sent by SMS, then a long-lived session.
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  phone       TEXT NOT NULL,
+  code_hash   TEXT NOT NULL,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  expires_at  TEXT NOT NULL,
+  used_at     TEXT,
+  created_at  TEXT NOT NULL                        -- ISO time from the engine's clock
+);
+CREATE TABLE IF NOT EXISTS farmer_sessions (
+  token_hash  TEXT PRIMARY KEY,
+  phone       TEXT NOT NULL,
+  expires_at  TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_codes(phone, created_at);
 CREATE INDEX IF NOT EXISTS idx_farmers_county ON farmers(county);
 CREATE INDEX IF NOT EXISTS idx_reports_county_status ON pest_reports(county, status);
 CREATE INDEX IF NOT EXISTS idx_questions_status ON questions(status);
@@ -122,11 +140,16 @@ const ADDED_COLUMNS = {
     provider_id: "TEXT",
     last_error: "TEXT",
     sent_at: "TEXT"
-  }
+  },
+  // Set by the farmer app for reports/questions made offline, so a retried sync never creates duplicates.
+  pest_reports: { client_id: "TEXT" },
+  questions: { client_id: "TEXT" }
 };
 const LATE_INDEXES = `
 CREATE INDEX IF NOT EXISTS idx_message_queue ON message_log(status, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_message_provider ON message_log(provider_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_client ON pest_reports(phone, client_id) WHERE client_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_questions_client ON questions(phone, client_id) WHERE client_id IS NOT NULL;
 `;
 
 function migrate(db) {
