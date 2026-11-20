@@ -162,8 +162,8 @@ Most of the original Sprint 2 list (USSD and app sign-up, consent, STOP, daily a
 | # | Work | Status |
 |---|---|---|
 | S2.1 | Assisted sign-up: lead farmers (new `lead` role) and officers register farmers in their counties; the farmer joins only by replying YES by SMS or on `*347#` (invitations expire after 7 days, max 3 SMS); dashboard form and invitation list | ✅ Done |
-| S2.2 | Farmer management for officers: search, one farmer's history (messages, reports, questions), fix crops and planting months, CSV export for the field-test log | Next |
-| S2.3 | `*347#` profile: change crops and planting month | |
+| S2.2 | Farmer management for officers: search (name, district, phone digits; county, crop and STOP filters), one farmer's history (messages, reports, questions, invitation), correct details and crops with an audit trail, CSV export for the field-test log | ✅ Done |
+| S2.3 | `*347#` profile: change crops and planting month | Next |
 | S2.4 | Field-test measures: USSD registration completion rate (exit criterion: 80%) and "Did it help? 1 = Yes, 2 = No" follow-up SMS after pest replies | |
 
 ## Next 7 days

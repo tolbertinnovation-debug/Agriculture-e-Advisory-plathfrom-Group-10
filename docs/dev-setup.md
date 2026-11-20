@@ -41,6 +41,8 @@ Everyone who uses the dashboard has their own account. `npm run seed` creates th
 
 **Assisted sign-up.** Officers and lead farmers register farmers on the dashboard (*Register a farmer*). The farmer gets an SMS and **joins only when they reply YES** (or answer the first `*347#` screen). NO, or no answer within 7 days, means nothing is kept. Invitations can be resent at most twice. Only admins can add farmers directly (`POST /api/farmers`, e.g. from signed paper forms).
 
+**Farmer management.** The dashboard's *Farmers* card searches by name, district or phone (type `0777 123` or `777123`), and filters by county, crop and STOP status. Click a farmer to see their whole history and to correct their name, district, county, language, crops and planting months; every change goes in the audit log with the old and new values. **Download CSV** gives the same list for the field-test log (Excel and Google Sheets open it; text that looks like a formula is made safe). Officers only find, change and export farmers in their own counties.
+
 **Staff & security page** (`/prototype/staff.html`, linked from the dashboard):
 - **Everyone** can change their password and turn on **2-step login**: a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy) on top of the password.
 - **Admins** create accounts (the first password is shown once), change roles and counties, reset passwords, switch accounts off (which logs them out at once), and read the **audit log** of who did what.
@@ -206,9 +208,12 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | GET | `/api/counties` | Liberia's 15 counties |
 | GET | `/api/content/crops` | Crop calendars |
 | GET | `/api/content/pests` | Symptom codes and pests |
-| POST 🔒 | `/api/farmers` | Assisted registration by an officer (needs `consent: true`) |
-| GET 🔒 | `/api/farmers?county=Bong` | List farmers |
+| POST 🔒 | `/api/farmers` | Admin only: add a farmer directly, e.g. from a signed paper form (needs `consent: true`) |
+| GET 🔒 | `/api/farmers?q=&county=&crop=&status=active\|opted_out&limit=&offset=` | Search farmers by name, district or phone digits; total in the `X-Total-Count` header |
+| GET 🔒 | `/api/farmers/export.csv?…same filters` | CSV for the field-test log: crops, SMS sent / delivered / failed, reports, questions, last contact (audited) |
 | GET 🔒 | `/api/farmers/:id` | One farmer |
+| GET 🔒 | `/api/farmers/:id/history` | Everything with one farmer, newest first: messages, pest reports, questions, invitation, joining, STOP |
+| PATCH 🔒 | `/api/farmers/:id` | Correct `name`, `district`, `county`, `language`, `crops` (not the phone, not STOP/START); audited with before and after |
 | GET 🔒 | `/api/farmers/:id/advice` | This week's advice for each crop |
 | POST 🔒 | `/api/pest-reports` | Report a pest for a farmer; returns diagnosis + reply SMS |
 | GET 🔒 | `/api/pest-reports?county=&status=` | List reports for officers |

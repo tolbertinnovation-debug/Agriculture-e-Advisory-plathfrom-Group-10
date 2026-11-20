@@ -23,7 +23,7 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 ```bash
 cd services/api
 npm install
-npm test        # 143 tests (also run on PostgreSQL in CI)
+npm test        # 149 tests (also run on PostgreSQL in CI)
 npm run seed    # demo farmers
 npm run dev
 ```

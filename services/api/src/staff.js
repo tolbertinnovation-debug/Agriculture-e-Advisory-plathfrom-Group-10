@@ -20,7 +20,7 @@ export const isAreaLimited = (staff) => AREA_ROLES.includes(staff?.role);
 export const PERMISSIONS = {
   admin: ["*"],
   officer: [
-    "stats:read", "hotspots:read", "farmers:read", "registrations:create", "registrations:read", "reports:read", "reports:write",
+    "stats:read", "hotspots:read", "farmers:read", "farmers:edit", "farmers:export", "registrations:create", "registrations:read", "reports:read", "reports:write",
     "questions:read", "questions:write", "broadcasts:read", "broadcasts:send",
     "prices:read", "jobs:read", "weather:run"
   ],

@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { COUNTIES, findCounty, normalizePhone } from "./geo.js";
 import { adviceForFarmer } from "./engine.js";
-import { cleanFarmerInput, createFarmer, getFarmer, getFarmerByPhone, listFarmers, countFarmersByCounty } from "./farmers.js";
+import { cleanFarmerInput, createFarmer, getFarmer, getFarmerByPhone, listFarmers, countFarmers, countFarmersByCounty, farmerHistory, updateFarmer, exportFarmersCsv, FARMER_STATUSES } from "./farmers.js";
 import { createPestReport, getPestReport, listPestReports, countPestReports, updatePestReport, STATUSES } from "./pestReports.js";
 import { listQuestions, countQuestions, answerQuestion, getQuestion, QUESTION_STATUSES } from "./questions.js";
 import { sqlDaysAgo, isUniqueViolation } from "./db.js";
@@ -182,8 +182,31 @@ export function createApp({
     res.json({ ok: true });
   });
 
+  // Search: ?q=<name, district or phone>&crop=rice&status=active|opted_out&county=Bong. The total is in X-Total-Count.
+  const farmerQuery = (req) => {
+    const crop = req.query.crop ? String(req.query.crop) : undefined;
+    if (crop && !content.crops.has(crop)) throw new AccessError(`Unknown crop "${crop}"`, 400);
+    const status = req.query.status ? String(req.query.status) : undefined;
+    if (status && !FARMER_STATUSES.includes(status)) throw new AccessError(`status must be one of ${FARMER_STATUSES.join(", ")}`, 400);
+    return { counties: scopeCounties(req, req.query.county), q: req.query.q ? String(req.query.q) : undefined, crop, status };
+  };
   app.get("/api/farmers", ...need("farmers:read"), async (req, res) => {
-    res.json(await listFarmers(db, { counties: scopeCounties(req, req.query.county), limit: intParam(req.query.limit, 100, 500), offset: intParam(req.query.offset, 0, 1e9) }));
+    const filter = farmerQuery(req);
+    const [list, total] = await Promise.all([
+      listFarmers(db, { ...filter, limit: intParam(req.query.limit, 100, 500), offset: intParam(req.query.offset, 0, 1e9) }),
+      countFarmers(db, filter)
+    ]);
+    res.set("X-Total-Count", String(total)).json(list);
+  });
+
+  // CSV list for the field-test log (opens in Excel or Google Sheets). Officers get their counties only.
+  app.get("/api/farmers/export.csv", ...need("farmers:export"), async (req, res) => {
+    const filter = farmerQuery(req);
+    const { csv, count } = await exportFarmersCsv(db, filter);
+    await audit(db, req.staff, "farmers.export", null, { count, ...Object.fromEntries(Object.entries(filter).filter(([, v]) => v !== undefined)) });
+    res.set("Content-Disposition", `attachment; filename="agriconnect-farmers-${now().toISOString().slice(0, 10)}.csv"`)
+      .set("Cache-Control", "no-store")
+      .type("text/csv; charset=utf-8").send(csv);
   });
 
   const farmerById = async (req) => {
@@ -195,6 +218,22 @@ export function createApp({
     const farmer = await farmerById(req);
     if (!farmer) return res.status(404).json({ error: "Farmer not found" });
     res.json(farmer);
+  });
+  // One farmer's full story: messages, pest reports, questions and sign-up, newest first.
+  app.get("/api/farmers/:id/history", ...need("farmers:read"), async (req, res) => {
+    const farmer = await farmerById(req);
+    if (!farmer) return res.status(404).json({ error: "Farmer not found" });
+    res.json(await farmerHistory(db, farmer, { limit: intParam(req.query.limit, 200, 1000) }));
+  });
+  // Correct a farmer's name, district, county, language or crops and planting months.
+  app.patch("/api/farmers/:id", ...need("farmers:edit"), async (req, res) => {
+    const farmer = await farmerById(req);
+    if (!farmer) return res.status(404).json({ error: "Farmer not found" });
+    const newCounty = req.body?.county !== undefined ? findCounty(req.body.county) : null;
+    if (newCounty) mustCover(req, newCounty); // an officer can't move a farmer out of their own area
+    const { farmer: updated, changes } = await updateFarmer(db, content, farmer, req.body ?? {});
+    if (Object.keys(changes).length) await audit(db, req.staff, "farmer.update", updated.phone, changes);
+    res.json({ ...updated, changes });
   });
   app.get("/api/farmers/:id/advice", ...need("farmers:read"), async (req, res) => {
     const farmer = await farmerById(req);
