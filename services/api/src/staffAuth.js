@@ -91,6 +91,12 @@ export function staffRoutes(app, ctx, guards, { require2fa = false } = {}) {
   });
 
   // 2-step login: start (get a secret for the authenticator app), then confirm with a code.
+  // Staff set their own mobile number for hotspot alerts by SMS ("" removes it).
+  app.post("/api/staff/me/phone", staffDuringSetup, async (req, res) => {
+    const updated = await updateStaff(db, req.staff.id, { phone: req.body?.phone ?? "" });
+    await audit(db, req.staff, "staff.phone", updated.email, { phone: updated.phone });
+    res.json(updated);
+  });
   app.post("/api/staff/me/2fa/start", staffDuringSetup, async (req, res) => res.json(await start2fa(db, req.staff.id)));
   app.post("/api/staff/me/2fa/enable", staffDuringSetup, async (req, res) => {
     await enable2fa(db, req.staff.id, String(req.body?.code ?? ""), now(), req.staffToken);

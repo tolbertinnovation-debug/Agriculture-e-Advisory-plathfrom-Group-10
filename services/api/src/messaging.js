@@ -18,15 +18,15 @@ export class MessageTooLongError extends Error {}
  * force: send even if the farmer said STOP. Only for replies to something the farmer
  * just did (their own SMS, USSD request, report or question), never for push messages.
  */
-export async function sendSms(db, { phone, farmerId = null, body, force = false, kind = "reply" }) {
+export async function sendSms(db, { phone, farmerId = null, body, force = false, kind = "reply", broadcastId = null }) {
   if (body.length > SMS_LIMIT) throw new MessageTooLongError(`SMS is ${body.length} characters (max ${SMS_LIMIT}): ${body}`);
   if (!force && farmerId != null) {
     const row = await db.get("SELECT opted_out_at FROM farmers WHERE id = ?", farmerId);
     if (row?.opted_out_at) return { skipped: "opted_out" };
   }
   const { id } = await db.get(
-    "INSERT INTO message_log (farmer_id, phone, channel, direction, body, status, kind) VALUES (?, ?, 'sms', 'out', ?, 'queued', ?) RETURNING id",
-    farmerId, phone, body, KINDS.includes(kind) ? kind : "reply"
+    "INSERT INTO message_log (farmer_id, phone, channel, direction, body, status, kind, broadcast_id) VALUES (?, ?, 'sms', 'out', ?, 'queued', ?, ?) RETURNING id",
+    farmerId, phone, body, KINDS.includes(kind) ? kind : "reply", broadcastId
   );
   return getMessage(db, id);
 }

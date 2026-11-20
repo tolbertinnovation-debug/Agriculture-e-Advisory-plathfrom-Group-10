@@ -184,8 +184,8 @@
         </div>
         <div class="chan">
           <label><input type="checkbox" id="chSms" checked> SMS</label>
-          <label class="off" title="Coming in a later step"><input type="checkbox" disabled> Voice call (soon)</label>
-          <label class="off" title="Coming in a later step"><input type="checkbox" disabled> App (soon)</label>
+          <label title="Shown on the farmer app's home screen (no SMS cost)"><input type="checkbox" id="chApp" checked> App</label>
+          <label class="off" title="Coming later"><input type="checkbox" disabled> Voice call (soon)</label>
         </div>
         <textarea id="bMsg" rows="4" maxlength="160">Fall armyworm seen in Nimba. Check your fields this week. Pick worms in the morning. Dial *347# option 4 to report.</textarea>
         <div class="muted" id="bCount" style="margin:6px 0 10px"></div>
@@ -489,10 +489,15 @@ function renderStats(s) {
   $("#legend").innerHTML = s.by_channel.map((c) => `<span><i style="background:${colors[c.channel] ?? "#888"}"></i>${esc(c.channel.toUpperCase())} ${Math.round((100 * c.farmers) / total)}%</span>`).join("");
 }
 
+let hotspotAlerts = [];
+function alertNote(h) {
+  const a = hotspotAlerts.find((x) => x.pest === h.pest && x.county === h.county);
+  return a ? `<div class="muted" title="SMS sent to officers ${esc(a.created_at)} UTC">📱 ${a.sent_to ? `${n(a.sent_to)} officer${a.sent_to === 1 ? "" : "s"} texted` : "no officer phone"}</div>` : "";
+}
 function renderHotspots(list) {
   $("#hotspotTable").innerHTML = list.length
     ? `<tr><th>Pest</th><th>County</th><th>Reports</th><th>Level</th><th></th></tr>` +
-      list.map((h, i) => `<tr><td>${esc(h.pest_name)}</td><td>${esc(h.county)}</td><td class="num">${h.reports}</td><td><span class="status l-${esc(h.level)}">${esc(h.level)}</span></td><td>${has("broadcasts:send") ? `<button class="act warn" onclick="warnFarmers(${i})">Warn farmers</button>` : ""}</td></tr>`).join("")
+      list.map((h, i) => `<tr><td>${esc(h.pest_name)}</td><td>${esc(h.county)}</td><td class="num">${h.reports}</td><td><span class="status l-${esc(h.level)}">${esc(h.level)}</span>${alertNote(h)}</td><td>${has("broadcasts:send") ? `<button class="act warn" onclick="warnFarmers(${i})">Warn farmers</button>` : ""}</td></tr>`).join("")
     : '<tr><td class="empty">No hotspots. When 3 farmers in one county report the same pest within 7 days, it shows here.</td></tr>';
   renderHotspots.list = list;
 }
@@ -527,9 +532,17 @@ function renderQuestions(list) {
     : '<tr><td class="empty">No questions yet. Farmers ask with SMS “ASK …” or *347# → 5.</td></tr>';
 }
 
+function deliveryLine(sms) {
+  if (!sms) return "📱 App only, no SMS";
+  if (!sms.total) return "SMS: none sent";
+  const waiting = sms.queued + sms.sending;
+  return `SMS: <b>${n(sms.delivered)}</b> delivered · ${n(sms.sent)} sent` + (waiting ? ` · ${n(waiting)} waiting` : "") +
+    (sms.failed ? ` · <span style="color:var(--red);font-weight:700">${n(sms.failed)} failed</span>` : "") +
+    (sms.delivered || sms.failed ? ` · <b>${Math.round(100 * sms.delivery_rate)}%</b>` : "");
+}
 function renderBroadcasts(list) {
   $("#sentList").innerHTML = list.length
-    ? "<b>Recently sent</b>" + list.slice(0, 4).map((b) => `<div>${esc(b.message)}<br><span class="muted">${b.counties.length ? esc(b.counties.join(", ")) : "All counties"} · ${b.crops.length ? esc(b.crops.join(", ")) : "all crops"} · ${n(b.reach)} farmers · ${ago(b.created_at)} ago</span></div>`).join("")
+    ? "<b>Recently sent</b>" + list.slice(0, 4).map((b) => `<div>${esc(b.message)}<br><span class="muted">${b.counties.length ? esc(b.counties.join(", ")) : "All counties"} · ${b.crops.length ? esc(b.crops.join(", ")) : "all crops"} · ${n(b.reach)} farmer${b.reach === 1 ? "" : "s"} · ${ago(b.created_at)} ago</span><br><span class="muted">${deliveryLine(b.sms)}</span></div>`).join("")
     : "";
 }
 
@@ -578,18 +591,19 @@ async function updatePreview() {
     const c = $("#bCounty").value; const found = DASH.byCounty.find((x) => x[0] === c);
     reach = found ? found[1] : DASH.byCounty.reduce((a, b) => a + b[1], 0);
   }
-  $("#bCount").textContent = `Will reach ${reach == null ? "?" : n(reach)} farmers · ${len}/160 characters (one SMS)`;
+  $("#bCount").textContent = `Will reach ${reach == null ? "?" : n(reach)} farmer${reach === 1 ? "" : "s"} · ${len}/160 characters (one SMS)`;
 }
 
 async function broadcast() {
   if (!live) return toast("Demo mode: start the API to send for real.");
-  if (!$("#chSms").checked) return toast("Choose at least one channel.", true);
+  const channels = [...($("#chSms").checked ? ["sms"] : []), ...($("#chApp").checked ? ["app"] : [])];
+  if (!channels.length) return toast("Choose at least one channel.", true);
   if (!reach) return toast("No farmers match this county and crop.", true);
-  if (!confirm(`Send this SMS to ${n(reach)} farmers?`)) return;
+  if (!confirm(channels.includes("sms") ? `Send this SMS to ${n(reach)} farmers?` : `Show this in the app to ${n(reach)} farmers (no SMS)?`)) return;
   $("#bSend").disabled = true;
   try {
-    const b = await api("POST", "/api/broadcasts", { ...target(), channels: ["sms"], message: $("#bMsg").value });
-    toast(`✅ Queued for ${n(b.queued)} farmers. They go out within seconds.`);
+    const b = await api("POST", "/api/broadcasts", { ...target(), channels, message: $("#bMsg").value });
+    toast(channels.includes("sms") ? `✅ Queued for ${n(b.queued)} farmer${b.queued === 1 ? "" : "s"}. They go out within seconds.` : `✅ Posted in the app for ${n(b.recipients)} farmer${b.recipients === 1 ? "" : "s"}.`);
     refresh();
   } catch (e) { toast(e.message, true); }
   $("#bSend").disabled = false;
@@ -677,6 +691,7 @@ async function refresh() {
     const get = (perm, path) => (has(perm) ? api("GET", path) : Promise.resolve(null));
     const regs = has("registrations:read") ? api("GET", "/api/registrations?limit=30") : Promise.resolve(null);
     const fieldTest = get("stats:read", "/api/field-test");
+    const alerts = get("hotspots:read", "/api/hotspots/alerts");
     const [stats, hotspots, reports, questions, broadcasts, jobs, weather, prices, flagged, reporters] = await Promise.all([
       get("stats:read", "/api/stats"), get("hotspots:read", "/api/hotspots"), get("reports:read", "/api/pest-reports?limit=25"),
       get("questions:read", "/api/questions?limit=25"), get("broadcasts:read", "/api/broadcasts"), get("jobs:read", "/api/jobs"),
@@ -689,6 +704,7 @@ async function refresh() {
     if (stats) renderStats(stats);
     const ft = await fieldTest;
     if (ft) renderFieldTest(ft);
+    hotspotAlerts = (await alerts) ?? [];
     if (hotspots) renderHotspots(hotspots);
     if (reports) renderReports(reports);
     if (questions) renderQuestions(questions);

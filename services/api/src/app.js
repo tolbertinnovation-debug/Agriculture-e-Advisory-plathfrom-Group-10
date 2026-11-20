@@ -9,7 +9,7 @@ import { cleanFarmerInput, createFarmer, getFarmer, getFarmerByPhone, listFarmer
 import { createPestReport, getPestReport, listPestReports, countPestReports, updatePestReport, STATUSES } from "./pestReports.js";
 import { listQuestions, countQuestions, answerQuestion, getQuestion, QUESTION_STATUSES } from "./questions.js";
 import { sqlDaysAgo, isUniqueViolation } from "./db.js";
-import { listHotspots } from "./hotspots.js";
+import { listHotspots, recentHotspotAlerts } from "./hotspots.js";
 import { previewBroadcast, sendBroadcast, listBroadcasts } from "./broadcasts.js";
 import { listMessages, markDelivery, messageStats } from "./messaging.js";
 import { runAdviceJob, lastJobRuns, nextAdviceRun, weatherCycle } from "./scheduler.js";
@@ -361,6 +361,10 @@ export function createApp({
   // ---- Hotspots: 3+ reports of one pest in one county within 7 days ----
   app.get("/api/hotspots", ...need("hotspots:read"), async (req, res) => {
     res.json(await listHotspots(db, content, { counties: scopeCounties(req, req.query.county), days: intParam(req.query.days, 7, 90) || 7 }));
+  });
+  // SMS alerts sent to officers when a hotspot appeared or got worse.
+  app.get("/api/hotspots/alerts", ...need("hotspots:read"), async (req, res) => {
+    res.json(await recentHotspotAlerts(db, { counties: scopeCounties(req, req.query.county), limit: intParam(req.query.limit, 20, 200) }));
   });
 
   // ---- Broadcasts: one advisory to many farmers (officers: only their counties) ----

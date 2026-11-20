@@ -3,6 +3,7 @@ import { ValidationError, getFarmerByPhone, getFarmer } from "./farmers.js";
 import { diagnose } from "./engine.js";
 import { findCounty, normalizePhone } from "./geo.js";
 import { sendSms } from "./messaging.js";
+import { alertOnHotspot } from "./hotspots.js";
 
 const FALLBACK_SMS =
   "Thank you. We could not match these signs. An extension officer will call you. Ref: {ref}. Dial *347# for help";
@@ -47,12 +48,15 @@ export async function createPestReport(db, content, input) {
   );
 
   const report = await getPestReport(db, id);
+  // A new hotspot (or a worse one) is texted to the county's officers straight away.
+  const alert = await alertOnHotspot(db, content, { pest: report.suggested_pest, county: report.county });
   const ref = `PR-${report.id}`;
   const lang = farmer?.language ?? "en";
   const reply_sms = match ? `${match.pest.sms[lang] ?? match.pest.sms.en}`.replace("Officer told.", `Ref ${ref}`) : FALLBACK_SMS.replace("{ref}", ref);
   return {
     report,
     ref,
+    hotspot_alert: alert ? { level: alert.level, sent_to: alert.sent_to } : null,
     diagnosis: match ? { pest: match.pest.id, name: match.pest.name, score: match.score } : null,
     reply_sms
   };
@@ -115,5 +119,7 @@ export async function updatePestReport(db, content, id, input) {
     await sendSms(db, { phone: updated.phone, farmerId: updated.farmer_id, body, force: true, kind: "alert" });
     notified = true;
   }
+  // A corrected pest can complete a hotspot for that pest.
+  if (confirmed && confirmed !== report.confirmed_pest && status !== "rejected") await alertOnHotspot(db, content, { pest: confirmed, county: updated.county });
   return { report: updated, notified };
 }
