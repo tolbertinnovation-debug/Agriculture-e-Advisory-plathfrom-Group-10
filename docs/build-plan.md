@@ -151,8 +151,8 @@ SMS and USSD traffic · voice minutes · hosting · phones for testing · transl
 | # | Work | Status |
 |---|---|---|
 | 2.1 | Staff accounts: personal logins, roles (admin / officer / editor / viewer), officers limited to their counties, 2-step login (TOTP), lockout after 5 wrong tries, 12-hour sessions, audit log, admin tools, `create-admin` script; replaces `OFFICER_TOKEN` | ✅ Done |
-| 2.2 | Deployment: Docker image, HTTPS (reverse proxy), daily backups + restore test, health checks, error tracking | Next |
-| 2.3 | PostgreSQL: async data layer, migrations, move from SQLite | |
+| 2.2 | Deployment: Docker image (non-root, health check), Caddy with automatic HTTPS, daily checked backups + restore script, system status page, error log + webhook alerts, security headers, per-IP login limits, clean shutdown, production safety checks, CI builds the image. Guide: [deploy.md](deploy.md) | ✅ Done |
+| 2.3 | PostgreSQL: async data layer, migrations, move from SQLite | Next |
 | 2.4 | Real-phone test with an SMS provider on Lonestar Cell MTN and Orange | Needs an SMS account |
 
 ## Next 7 days

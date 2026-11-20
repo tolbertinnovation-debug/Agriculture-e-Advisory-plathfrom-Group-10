@@ -63,6 +63,11 @@
       </div>
     </div>
 
+    <div class="card stack hide" id="systemCard">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">System status <span><button class="act ghost" id="backupNow">Back up now</button> <button class="act ghost" id="statusRefresh">Refresh</button></span></h3>
+      <div id="system"></div>
+    </div>
+
     <div class="card stack hide" id="staffAdmin">
       <h3>Staff accounts</h3>
       <div class="scroll"><table id="staffTable"></table></div>
@@ -224,6 +229,31 @@ async function renderAudit() {
     list.map((a) => `<tr><td>${esc(a.created_at.slice(0, 16))}</td><td>${esc(a.staff_email ?? "-")}</td><td><b>${esc(a.action)}</b></td><td>${esc(a.target ?? "")}</td><td class="muted" style="font-size:12.5px">${esc(a.detail ? JSON.stringify(a.detail).slice(0, 120) : "")}</td></tr>`).join("");
 }
 
+// ---------------- admin: system status ----------------
+async function renderSystem() {
+  const s = await api("GET", "/api/admin/status");
+  const kb = (b) => (b ? `${Math.round(b / 1024)} KB` : "");
+  $("#system").innerHTML = `
+    <p style="margin:0"><span class="status ${s.ok ? "on" : "off"}">${s.ok ? "ALL GOOD" : "NEEDS ATTENTION"}</span></p>
+    ${s.warnings.length ? `<ul style="margin:0;padding-left:18px;font-size:14px">${s.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+    <table>
+      <tr><td>Last backup</td><td>${s.backup ? `${esc(s.backup.at.slice(0, 16).replace("T", " "))} UTC · ${s.backup.ok ? "checked OK" : "<b>FAILED its check</b>"} · ${kb(s.backup.bytes)} · ${s.backups_kept} kept` : "none yet"}</td></tr>
+      <tr><td>SMS</td><td>provider <b>${esc(s.sms.provider)}</b> · ${s.sms.waiting} waiting · ${s.sms.failed_24h} failed in 24 h</td></tr>
+      <tr><td>Weather</td><td>${s.weather.last_fetch ? `updated ${esc(s.weather.last_fetch.slice(0, 16).replace("T", " "))} UTC (${s.weather.counties} counties)` : "no real forecast yet"}</td></tr>
+      <tr><td>Daily advice</td><td>${s.advice ? `last run ${esc(s.advice.last_run.slice(0, 16))} UTC · ${s.advice.sent} sent` : "not run yet"}</td></tr>
+      <tr><td>Server</td><td>up ${s.uptime_minutes} min · Node ${esc(s.node)} · ${s.errors_24h} error(s) in 24 h</td></tr>
+    </table>
+    ${s.recent_errors.length ? `<details><summary class="muted" style="cursor:pointer">Recent errors (${s.recent_errors.length})</summary><table>${s.recent_errors.map((e) => `<tr><td>${esc(e.created_at.slice(0, 16).replace("T", " "))}</td><td>${esc(e.message)}</td><td class="muted">${esc(e.context.path ?? e.context.job ?? "")}</td></tr>`).join("")}</table></details>` : ""}`;
+}
+$("#statusRefresh").onclick = () => renderSystem().catch((e) => toast(e.message, true));
+$("#backupNow").onclick = async () => {
+  try {
+    const r = await api("POST", "/api/admin/backup", {});
+    toast(r.ok ? `Backup made and checked: ${r.file}` : "Backup FAILED its check", !r.ok);
+    await renderSystem(); await renderAudit();
+  } catch (e) { if (!e.login) toast(e.message, true); }
+};
+
 // ---------------- start ----------------
 async function start() {
   try { me = await api("GET", "/api/staff/me"); } catch { return; }
@@ -231,6 +261,8 @@ async function start() {
   renderMe();
   const admin = me.permissions.includes("staff:manage");
   $("#staffAdmin").classList.toggle("hide", !admin);
+  $("#systemCard").classList.toggle("hide", !me.permissions.includes("audit:read"));
+  if (me.permissions.includes("audit:read") && me.mfa_ok !== false) await renderSystem().catch(() => {});
   $("#auditCard").classList.toggle("hide", !me.permissions.includes("audit:read"));
   if (admin && me.mfa_ok !== false) { await renderStaff(); await renderAudit(); }
   if (location.hash === "#security") $("#security").scrollIntoView();

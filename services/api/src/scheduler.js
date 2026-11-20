@@ -10,6 +10,7 @@ import { adviceForFarmer } from "./engine.js";
 import { sendSms, deliverQueued, requeueStuck } from "./messaging.js";
 import { getFarmer } from "./farmers.js";
 import { refreshWeather, sendWeatherAlerts } from "./weather.js";
+import { backupDatabase, recordError } from "./ops.js";
 
 export const REMINDER_DAYS = 28;
 export const WEEKLY_CAP = 3;
@@ -101,7 +102,13 @@ export async function weatherCycle(ctx, { fetch, url, log = console } = {}) {
   return { ...r, alerts };
 }
 
-export function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs = 2000, scheduler = true, weather = true, weatherEveryHours = 3, weatherUrl, log = console } = {}) {
+/** True when today's backup is due (after `hour`:00) and has not been made yet. */
+export function backupDue(db, now, hour) {
+  if (now.getUTCHours() < hour) return false;
+  return !db.prepare("SELECT 1 FROM backups WHERE ok = 1 AND substr(created_at, 1, 10) = ?").get(now.toISOString().slice(0, 10));
+}
+
+export function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs = 2000, scheduler = true, weather = true, weatherEveryHours = 3, weatherUrl, backupDir, backupHour = 2, backupKeep = 14, log = console } = {}) {
   const stuck = requeueStuck(ctx.db);
   if (stuck) log.log(`Re-queued ${stuck} message(s) that were being sent when the server stopped.`);
 
@@ -119,24 +126,36 @@ export function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs = 2000
     }
   }, sendEveryMs);
 
-  let adviceTimer = null;
-  if (scheduler) {
+  // Daily jobs, checked every minute: the backup (BACKUP_DIR) and the crop advice (SCHEDULER).
+  // They are independent: switching advice off never stops backups.
+  let dailyTimer = null;
+  if (scheduler || backupDir) {
     const check = () => {
       try {
-        if (adviceRunDue(ctx.db, ctx.now(), adviceHour)) {
+        if (backupDir && backupDue(ctx.db, ctx.now(), backupHour)) {
+          const b = backupDatabase(ctx.db, backupDir, { now: ctx.now(), keep: backupKeep });
+          if (b.ok) log.log(`Backup made and checked: ${b.file} (${Math.round(b.bytes / 1024)} KB, ${b.farmers} farmers)`);
+          else recordError(ctx.db, new Error(`Backup check FAILED: ${b.error ?? b.integrity}`), { job: "backup" });
+        }
+      } catch (err) {
+        recordError(ctx.db, err, { job: "backup" });
+      }
+      try {
+        if (scheduler && adviceRunDue(ctx.db, ctx.now(), adviceHour)) {
           const s = runAdviceJob(ctx, { trigger: "schedule" });
           log.log(`Daily advice: ${s.sent} queued for ${s.farmers} farmers (${s.recent} already had it, ${s.cap} over the weekly limit).`);
         }
       } catch (err) {
-        log.error("Advice job error:", err);
+        recordError(ctx.db, err, { job: "advice" });
       }
     };
     check();
-    adviceTimer = setInterval(check, 60 * 1000);
+    dailyTimer = setInterval(check, 60 * 1000);
   }
+  const adviceTimer = dailyTimer;
   let weatherTimer = null;
   if (weather) {
-    const run = () => weatherCycle(ctx, { url: weatherUrl, log }).catch((err) => log.error("Weather error:", err));
+    const run = () => weatherCycle(ctx, { url: weatherUrl, log }).catch((err) => recordError(ctx.db, err, { job: "weather" }));
     run();
     weatherTimer = setInterval(run, weatherEveryHours * 3600 * 1000);
   }

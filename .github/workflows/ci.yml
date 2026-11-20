@@ -19,3 +19,22 @@ jobs:
           cache-dependency-path: services/api/package-lock.json
       - run: npm ci
       - run: npm test
+
+  docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t agriconnect:ci .
+      - name: Start it and wait until it is ready
+        run: |
+          docker run -d --name agriconnect -p 3000:3000 -e WEATHER=off agriconnect:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/ready; then echo; echo "ready"; break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:3000/ready
+          docker exec agriconnect id -u | grep -qv '^0$'   # must not run as root
+      - name: Show logs
+        if: always()
+        run: docker logs agriconnect || true

@@ -189,6 +189,23 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Operations: backups made (and checked), and unexpected server errors.
+CREATE TABLE IF NOT EXISTS backups (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  file        TEXT NOT NULL,
+  bytes       INTEGER NOT NULL,
+  ok          INTEGER NOT NULL,                    -- 1 = the copy passed its integrity check
+  detail      TEXT,
+  created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS error_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  message     TEXT NOT NULL,
+  stack       TEXT,
+  context     TEXT,
+  created_at  TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_prices ON prices(market, item, reported_at);
 CREATE INDEX IF NOT EXISTS idx_weather_alerts ON weather_alerts(county, sent_at);
 CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_codes(phone, created_at);

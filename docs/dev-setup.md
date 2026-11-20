@@ -13,7 +13,7 @@ npm install
 ```bash
 npm test
 ```
-You should see `# pass 114` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
+You should see `# pass 125` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
 
 ## 3. Add demo data and start the API
 ```bash
@@ -228,6 +228,9 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | PATCH 🔒 | `/api/staff/:id` | Admin: `{name, role, counties, active}` |
 | POST 🔒 | `/api/staff/:id/reset-password` | Admin: new one-time password (`{reset_2fa: true}` also resets 2-step login) |
 | GET 🔒 | `/api/audit` | Admin: audit log |
+| GET 🔒 | `/api/admin/status` | Admin: backups, SMS, weather, advice, errors, warnings |
+| POST 🔒 | `/api/admin/backup` | Admin: back up now (needs `BACKUP_DIR`) |
+| GET | `/ready` | 200 only when the app and its database answer (for Docker and uptime monitors) |
 | POST 🔒 | `/api/jobs/weather/run` | Fetch all county forecasts now (and send due rain alerts) |
 | POST | `/api/auth/request-code` | `{phone}` → SMS with a 6-digit code (`dev_code` in the answer only when `SMS_PROVIDER=log`) |
 | POST | `/api/auth/verify` | `{phone, code}` → `{token, registered}` |
@@ -256,6 +259,14 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | `REQUIRE_2FA` | *(off)* | `1` = every staff member must set up 2-step login before using the dashboard. **Set it on a real server.** |
 | `STAFF_AUTH` | *(on)* | `off` = the dashboard needs no login (quick local demo only; never on a shared server) |
 | ~~`OFFICER_TOKEN`~~ | | Removed: replaced by personal staff accounts |
+| `NODE_ENV` | *(unset)* | `production` on a real server: HTTPS headers, CORS closed, unsafe settings refused |
+| `BACKUP_DIR` | *(off)* | Folder for daily checked backups (`/backups` in Docker) |
+| `BACKUP_HOUR` / `BACKUP_KEEP` | `2` / `14` | When to back up (Liberia time) and how many to keep |
+| `ERROR_WEBHOOK_URL` | *(unset)* | Slack / Discord / Teams webhook for server-error alerts |
+| `TRUST_PROXY` | *(off)* | `1` behind Caddy or a load balancer (set in the Docker image) |
+| `CORS_ORIGINS` | `*` in development, none in production | Other websites allowed to call the API |
+
+**Putting it on a server:** see [deploy.md](deploy.md) (Docker + HTTPS + backups).
 
 ## USSD menu (live)
 ```

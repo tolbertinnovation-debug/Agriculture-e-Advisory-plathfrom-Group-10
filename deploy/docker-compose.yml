@@ -1,0 +1,44 @@
+# AgriConnect on one server: the app + Caddy (automatic HTTPS with free Let's Encrypt certificates).
+# Usage (in this folder):  cp .env.example .env  → edit .env  →  docker compose up -d --build
+# Full guide: docs/deploy.md
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: agriconnect:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    volumes:
+      - agriconnect-data:/data      # the database
+      - ./backups:/backups          # daily backups, on the host so they are easy to copy off-site
+    expose:
+      - "3000"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env, e.g. agriconnect.example.org}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data            # certificates
+      - caddy-config:/config
+    depends_on:
+      - api
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  agriconnect-data:
+  caddy-data:
+  caddy-config:

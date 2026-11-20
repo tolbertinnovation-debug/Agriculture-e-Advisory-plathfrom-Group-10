@@ -23,7 +23,7 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 ```bash
 cd services/api
 npm install
-npm test        # 114 tests
+npm test        # 125 tests
 npm run seed    # demo farmers
 npm run dev
 ```
@@ -35,6 +35,14 @@ npm run dev
 
 The USSD simulator and the officer dashboard (`/prototype/dashboard.html`) go **LIVE** when the API is running: register farmers on `*347#`, report pests, watch the hotspot appear on the dashboard, then warn farmers and see the SMS arrive.
 Full guide: [docs/dev-setup.md](docs/dev-setup.md). Needs Node.js 22.13 or newer; no database to install.
+
+## Put it on a server
+Docker + automatic HTTPS + daily checked backups: see **[docs/deploy.md](docs/deploy.md)**.
+```bash
+cd deploy && cp .env.example .env   # set DOMAIN etc.
+docker compose up -d --build
+docker compose exec api npm run create-admin -- you@example.org "Your Name"
+```
 
 ## Pre-work documents
 1. [Frame the problem](docs/01-problem-framing.md)

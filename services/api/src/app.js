@@ -19,6 +19,8 @@ import { getForecast, COUNTY_POINTS } from "./weather.js";
 import { recordPrice, latestPrices, allLatestPrices, listFlaggedPrices, setPriceStatus, addReporter, listReporters } from "./prices.js";
 import { staffGuards, staffRoutes, scopeCounties, mustCover } from "./staffAuth.js";
 import { audit, can } from "./staff.js";
+import { securityHeaders, cors, rateLimit } from "./http.js";
+import { recordError, systemStatus, recentErrors, backupDatabase, listBackupFiles } from "./ops.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROTOTYPE_DIR = resolve(HERE, "../../../prototype");
@@ -53,24 +55,36 @@ export function createApp({
   adviceHour = Number(process.env.ADVICE_HOUR ?? 7),
   providerName = process.env.SMS_PROVIDER ?? "log",
   weatherFetch = globalThis.fetch,
-  weatherUrl = process.env.WEATHER_URL
+  weatherUrl = process.env.WEATHER_URL,
+  // Deployment settings (see docs/deploy.md)
+  production = process.env.NODE_ENV === "production",
+  corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean) : production ? [] : "*",
+  trustProxy = process.env.TRUST_PROXY === "1",
+  backupDir = process.env.BACKUP_DIR,
+  backupKeep = Number(process.env.BACKUP_KEEP ?? 14),
+  rateLimits = true
 }) {
   const ctx = { db, content, now };
   const guards = staffGuards({ db, now, enabled: staffAuth });
   const { staff, need } = guards;
   const gateway = webhookGuard(webhookSecret);
   const app = express();
+  app.disable("x-powered-by");
+  if (trustProxy) app.set("trust proxy", 1); // behind Caddy / a load balancer: use the real client IP
+  app.use(securityHeaders({ https: production }));
   app.use(express.json({ limit: "100kb" }));
   app.use(express.urlencoded({ extended: false, limit: "20kb" })); // USSD/SMS gateways post form data
 
-  // Allow the prototype pages (opened from file:// or another port) to call the API during development.
-  app.use((req, res, next) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.set("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
-    if (req.method === "OPTIONS") return res.sendStatus(204);
-    next();
-  });
+  // CORS: open in development (pages opened from file://), closed in production unless CORS_ORIGINS is set.
+  app.use(cors(corsOrigins));
+
+  // Per-IP limits on sign-in routes (on top of per-account lockouts).
+  if (rateLimits) {
+    const tenMin = 10 * 60 * 1000;
+    app.use("/api/staff/login", rateLimit({ max: 20, windowMs: tenMin, now: () => now().getTime() }));
+    app.use("/api/auth/request-code", rateLimit({ max: 10, windowMs: tenMin, now: () => now().getTime() }));
+    app.use("/api/auth/verify", rateLimit({ max: 30, windowMs: tenMin, now: () => now().getTime() }));
+  }
 
   // The officer dashboard, staff pages and USSD simulator: http://localhost:3000/prototype/...
   app.use("/prototype", express.static(PROTOTYPE_DIR));
@@ -80,7 +94,16 @@ export function createApp({
   app.use("/app", express.static(FARMER_APP_DIR));
   app.get("/", (req, res) => res.redirect("/app/"));
 
+  // Liveness: the process answers. Readiness: the database answers too (used by Docker and uptime monitors).
   app.get("/health", (req, res) => res.json({ ok: true, service: "agriconnect-api", time: now().toISOString() }));
+  app.get("/ready", (req, res) => {
+    try {
+      db.prepare("SELECT 1").get();
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(503).json({ ok: false, error: "database unavailable" });
+    }
+  });
 
   // ---- Reference data (public) ----
   app.get("/api/counties", (req, res) => res.json(COUNTIES));
@@ -306,6 +329,17 @@ export function createApp({
     });
   });
 
+  // ---- Admin: system status, errors, backups ----
+  app.get("/api/admin/status", ...need("audit:read"), (req, res) => {
+    res.json({ ...systemStatus(db, { now: now(), backupDir, smsProvider: providerName }), recent_errors: recentErrors(db, 10) });
+  });
+  app.post("/api/admin/backup", ...need("audit:read"), (req, res) => {
+    if (!backupDir) return res.status(400).json({ error: "Backups are off: set BACKUP_DIR" });
+    const result = backupDatabase(db, backupDir, { now: now(), keep: backupKeep });
+    audit(db, req.staff, "backup.run", result.file.split(/[\\/]/).pop(), { ok: result.ok, bytes: result.bytes });
+    res.json({ ...result, file: result.file.split(/[\\/]/).pop(), kept: listBackupFiles(backupDir).length });
+  });
+
   farmerRoutes(app, ctx, { exposeDevCode: providerName === "log" });
 
   app.use((req, res) => res.status(404).json({ error: "Not found" }));
@@ -316,7 +350,7 @@ export function createApp({
     if (err.type === "entity.parse.failed") return res.status(400).json({ error: "Body must be valid JSON" });
     if (err.status === 400 && err.errors) return res.status(400).json({ error: "Invalid input", details: err.errors });
     if (err.auth) return res.status(err.status).json({ error: err.message, ...(err.extra ?? {}) });
-    console.error(err);
+    recordError(db, err, { method: req.method, path: req.path });
     res.status(500).json({ error: "Something went wrong" });
   });
 
