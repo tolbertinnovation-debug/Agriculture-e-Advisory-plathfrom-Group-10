@@ -2,6 +2,7 @@
 //   STOP          stop push advice
 //   START         turn advice back on
 //   HELP          how to use AgriConnect
+//   YES / NO      answer an invitation from an officer or lead farmer (assisted sign-up)
 //   ASK <text>    send a question to an extension officer
 //   WEATHER       the forecast and farm advice for the farmer's county
 //   PRICES <mkt>  latest market prices (e.g. PRICES GBARNGA)
@@ -11,6 +12,7 @@ import { normalizePhone } from "./geo.js";
 import { getFarmerByPhone, setOptedOut } from "./farmers.js";
 import { createQuestion } from "./questions.js";
 import { logInbound, sendSms } from "./messaging.js";
+import { answerRegistration } from "./registrations.js";
 import { getForecast } from "./weather.js";
 import { recordPrice, latestPrices, findMarket, getReporter, priceText } from "./prices.js";
 
@@ -28,6 +30,12 @@ export async function handleInboundSms(ctx, { from, text }) {
   const [keyword, ...rest] = body.split(/\s+/);
   const word = (keyword ?? "").toUpperCase();
   let reply;
+
+  // Answer to an assisted-registration invitation (sends its own reply).
+  if (!farmer && ["YES", "Y", "NO", "N", "STOP"].includes(word)) {
+    const answer = await answerRegistration(ctx, phone, word === "YES" || word === "Y");
+    if (answer.status !== "none") return { ok: true, reply: answer.status, registration: answer.status };
+  }
 
   if (word === "STOP") {
     if (farmer) await setOptedOut(db, farmer.id, true);

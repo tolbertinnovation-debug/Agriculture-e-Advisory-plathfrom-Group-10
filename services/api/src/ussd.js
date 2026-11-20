@@ -22,6 +22,7 @@ import { sendAdviceToFarmer } from "./scheduler.js";
 import { getForecast, shortForecast } from "./weather.js";
 import { latestPrices, priceText } from "./prices.js";
 import { isUniqueViolation } from "./db.js";
+import { waitingRegistration, answerRegistration } from "./registrations.js";
 
 export const USSD_MAX = 182;
 
@@ -224,6 +225,19 @@ export async function handleUssd(ctx, { phoneNumber, text }) {
   try {
     const farmer = await getFarmerByPhone(ctx.db, phone);
     if (!farmer) {
+      // Someone registered this farmer for them: ask for their consent first.
+      const invite = await waitingRegistration(ctx.db, phone, ctx.now());
+      if (invite) {
+        const crops = invite.details.crops.map((c) => ctx.content.crops.get(c.crop)?.name.split(" ")[0] ?? c.crop).join(" & ");
+        const yes = s.choose(`${(invite.registrar_name ?? "An officer").slice(0, 22)} registered you for free ${crops} advice in ${invite.county}. Join?`, [
+          { label: "Yes, join (free)", value: true },
+          { label: "No", value: false }
+        ]);
+        const answer = await answerRegistration(ctx, phone, yes);
+        return answer.status === "joined"
+          ? end("Welcome! You are registered.\nCheck your SMS for your first farm advice.")
+          : end("OK. You are not registered. Dial *347# if you change your mind.");
+      }
       const choice = s.choose("Welcome to AgriConnect Liberia. Free farm advice.", [
         { label: "Register (free)", value: "register" },
         { label: "Report pest or disease", value: "pest" },

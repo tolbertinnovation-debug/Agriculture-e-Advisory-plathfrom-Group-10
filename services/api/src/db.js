@@ -275,6 +275,30 @@ export const MIGRATIONS = [
       }
       await t.exec(INDEXES_V1);
     }
+  },
+  {
+    version: 2,
+    name: "assisted registrations waiting for the farmer's YES",
+    async up(t) {
+      await t.exec(fill(`
+CREATE TABLE IF NOT EXISTS registrations (
+  id             {{ID}},
+  phone          TEXT NOT NULL,
+  details        TEXT NOT NULL,                    -- JSON: name, county, district, language, crops
+  county         TEXT NOT NULL,
+  registered_by  INTEGER REFERENCES staff(id),     -- the officer or lead farmer
+  registrar_name TEXT,
+  status         TEXT NOT NULL DEFAULT 'waiting',  -- waiting | joined | refused | expired | cancelled
+  sms_sent       INTEGER NOT NULL DEFAULT 1,       -- how many invitations were sent (max 3)
+  farmer_id      INTEGER REFERENCES farmers(id),
+  created_at     TEXT NOT NULL,
+  expires_at     TEXT NOT NULL,
+  answered_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_registrations_phone ON registrations(phone, status);
+CREATE INDEX IF NOT EXISTS idx_registrations_county ON registrations(county, status);
+`, t.dialect));
+    }
   }
 ];
 
@@ -297,7 +321,7 @@ export async function migrate(db) {
 export const TABLES = [
   "farmers", "farmer_crops", "pest_reports", "questions", "broadcasts", "message_log", "advice_sends", "job_runs",
   "otp_codes", "farmer_sessions", "weather_forecasts", "weather_alerts", "market_reporters", "prices",
-  "staff", "staff_sessions", "audit_log", "backups", "error_log"
+  "staff", "staff_sessions", "audit_log", "backups", "error_log", "registrations"
 ];
 
 // ---------------------------------------------------------------- SQLite

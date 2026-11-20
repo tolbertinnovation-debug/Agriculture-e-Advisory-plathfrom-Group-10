@@ -67,13 +67,14 @@
 <div class="layout">
   <aside class="nav">
     <div class="logo">🌱 AgriConnect</div>
-    <a href="#overview">📊 Overview</a>
-    <a href="#hotspots">⚠ Hotspots</a>
-    <a href="#weather">🌦️ Weather</a>
-    <a href="#prices">💰 Market prices</a>
-    <a href="#reports">🐛 Pest reports</a>
-    <a href="#questions">💬 Farmer questions</a>
-    <a href="#advisory">📣 Send advisory</a>
+    <a href="#overview" data-perm="stats:read">📊 Overview</a>
+    <a href="#hotspots" data-perm="hotspots:read">⚠ Hotspots</a>
+    <a href="#weather" data-perm="stats:read">🌦️ Weather</a>
+    <a href="#prices" data-perm="prices:read">💰 Market prices</a>
+    <a href="#reports" data-perm="reports:read">🐛 Pest reports</a>
+    <a href="#questions" data-perm="questions:read">💬 Farmer questions</a>
+    <a href="#advisory" data-perm="broadcasts:send">📣 Send advisory</a>
+    <a href="#regRow" data-perm="registrations:create">📝 Register farmers</a>
     <a href="staff.html">🔐 Staff &amp; security</a>
     <a href="ussd.html">📱 USSD simulator</a>
   </aside>
@@ -93,7 +94,20 @@
 
     <div class="kpis" id="kpis"></div>
 
-    <div class="row">
+    <div class="row" id="regRow">
+      <div class="card" id="registerCard">
+        <h3>📝 Register a farmer</h3>
+        <p class="muted" style="margin:0 0 8px">The farmer gets an SMS and joins only when <b>they</b> reply YES (or answer on *347#). Their consent, their choice.</p>
+        <div class="form-row"><input type="text" id="rName" placeholder="Name"><input type="text" id="rPhone" placeholder="Phone, e.g. 0777 123 456"></div>
+        <div class="form-row"><select id="rCounty" aria-label="County"></select><input type="text" id="rDistrict" placeholder="District or town"></div>
+        <div class="form-row"><select id="rLang" aria-label="Language"><option value="en">Liberian English</option><option value="kpe">Kpelle</option><option value="bsq">Bassa</option><option value="kss">Kissi</option></select><span></span></div>
+        <div id="rCrops" style="margin:6px 0 10px;font-size:14px"></div>
+        <button class="btn" onclick="registerFarmer()">Send invitation</button>
+      </div>
+      <div class="card" id="invites"><h3>Invitations <span class="muted">waiting for the farmer's YES</span></h3><div class="scroll"><table id="regTable"></table></div></div>
+    </div>
+
+    <div class="row" id="overviewRow">
       <div class="card"><h3>Registered farmers by county</h3><div id="counties"></div></div>
       <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
         <div class="card" id="hotspots"><h3>⚠ Hotspots (7 days) <span class="muted">3+ reports, same pest &amp; county</span></h3><div class="scroll"><table id="hotspotTable"></table></div></div>
@@ -104,7 +118,7 @@
       </div>
     </div>
 
-    <div class="row">
+    <div class="row" id="marketRow">
       <div class="card" id="weather"><h3>🌦️ Weather by county <button class="act ghost" onclick="refreshWeather()">Refresh now</button></h3><div class="scroll"><table id="weatherTable"></table></div><p class="muted" id="weatherNote" style="margin:8px 0 0"></p></div>
       <div class="card" id="prices">
         <h3>💰 Market prices <select id="pMarket" style="width:auto;font-size:13px;padding:6px"></select></h3>
@@ -119,7 +133,7 @@
 
     <div class="card" id="reports"><h3>Pest reports <span class="muted">newest first</span></h3><div class="scroll"><table id="reportTable"></table></div></div>
 
-    <div class="row">
+    <div class="row" id="workRow">
       <div class="card" id="questions"><h3>Farmer questions</h3><div class="scroll"><table id="questionTable"></table></div></div>
       <div class="card" id="advisory">
         <h3>📣 Send an advisory</h3>
@@ -208,9 +222,54 @@ function applyRole() {
   show("#prices", has("prices:read"));
   show("#prices details", has("reporters:write"));
   show("#weather button", has("weather:run"));
-  // Officers can only message their own counties.
-  const counties = me.role === "officer" ? me.counties : COUNTIES;
-  $("#bCounty").innerHTML = `<option value="">${me.role === "officer" ? "All my counties" : "All counties"}</option>` + counties.map((c) => `<option>${esc(c)}</option>`).join("");
+  show("#kpis, #overviewRow, #marketRow", has("stats:read"));
+  show("#workRow", has("questions:read") || has("broadcasts:send"));
+  show("#regRow", has("registrations:create"));
+  document.querySelectorAll("aside.nav a[data-perm]").forEach((a) => a.classList.toggle("hide", !has(a.dataset.perm)));
+  // Officers and lead farmers only work in their own counties.
+  const area = me.role === "officer" || me.role === "lead";
+  const counties = area ? me.counties : COUNTIES;
+  $("#bCounty").innerHTML = `<option value="">${area ? "All my counties" : "All counties"}</option>` + counties.map((c) => `<option>${esc(c)}</option>`).join("");
+  $("#rCounty").innerHTML = counties.map((c) => `<option>${esc(c)}</option>`).join("");
+}
+
+// ---------------- assisted registration ----------------
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function renderCropPicker(crops) {
+  $("#rCrops").innerHTML = "<b>Crops and planting month</b>" + crops.map(([id, name]) =>
+    `<div style="display:flex;gap:8px;align-items:center;margin-top:4px"><label style="flex:1"><input type="checkbox" class="rCrop" value="${esc(id)}"> ${esc(name)}</label>
+     <select class="rMonth" data-crop="${esc(id)}" style="width:auto">${MONTHS.map((m, i) => `<option value="${i + 1}" ${i === 4 ? "selected" : ""}>${m}</option>`).join("")}</select></div>`).join("");
+}
+
+const REG_STATUS = { waiting: ["Waiting for YES", "s-callback"], joined: ["Joined ✓", "s-answered"], refused: ["Said no", "s-closed"], expired: ["Expired", "s-closed"], cancelled: ["Cancelled", "s-closed"] };
+function renderRegistrations(list) {
+  $("#regTable").innerHTML = list.length
+    ? `<tr><th>Farmer</th><th>County</th><th>By</th><th>Status</th><th></th></tr>` +
+      list.map((r) => `<tr><td><b>${esc(r.details.name ?? "")}</b><div class="muted">${esc(r.phone)}</div></td><td>${esc(r.county)}</td><td class="muted">${esc(r.registrar_name ?? "")}</td>
+        <td><span class="status ${REG_STATUS[r.status][1]}">${REG_STATUS[r.status][0]}</span>${r.status === "waiting" ? `<div class="muted">${r.sms_sent} SMS sent</div>` : ""}</td>
+        <td>${r.status === "waiting" ? `<div class="actions"><button class="act ghost" onclick="regAction(${r.id}, 'resend')">Resend</button><button class="act ghost" onclick="regAction(${r.id}, 'cancel')">Cancel</button></div>` : ""}</td></tr>`).join("")
+    : '<tr><td class="empty">No invitations yet. Register a farmer with the form.</td></tr>';
+}
+
+async function registerFarmer() {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  const crops = [...document.querySelectorAll(".rCrop:checked")].map((c) => ({ crop: c.value, planting_month: Number(document.querySelector(`.rMonth[data-crop="${c.value}"]`).value) }));
+  if (!crops.length) return toast("Tick at least one crop.", true);
+  try {
+    const r = await api("POST", "/api/registrations", { name: $("#rName").value, phone: $("#rPhone").value, county: $("#rCounty").value, district: $("#rDistrict").value, language: $("#rLang").value, crops });
+    toast(`Invitation sent to ${r.phone}. They join when they reply YES.`);
+    $("#rName").value = ""; $("#rPhone").value = ""; $("#rDistrict").value = "";
+    refresh();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function regAction(id, action) {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  try {
+    await api("POST", `/api/registrations/${id}/${action}`, {});
+    toast(action === "resend" ? "Invitation sent again." : "Invitation cancelled.");
+    refresh();
+  } catch (e) { toast(e.message, true); }
 }
 
 // ---------------- rendering (same for live and demo) ----------------
@@ -419,12 +478,16 @@ async function refresh() {
   try {
     // Only ask for what this role may see.
     const get = (perm, path) => (has(perm) ? api("GET", path) : Promise.resolve(null));
+    const regs = has("registrations:read") ? api("GET", "/api/registrations?limit=30") : Promise.resolve(null);
     const [stats, hotspots, reports, questions, broadcasts, jobs, weather, prices, flagged, reporters] = await Promise.all([
       get("stats:read", "/api/stats"), get("hotspots:read", "/api/hotspots"), get("reports:read", "/api/pest-reports?limit=25"),
       get("questions:read", "/api/questions?limit=25"), get("broadcasts:read", "/api/broadcasts"), get("jobs:read", "/api/jobs"),
-      api("GET", "/api/weather"), api("GET", "/api/prices"), get("prices:read", "/api/prices/flagged"), get("prices:read", "/api/reporters")
+      get("stats:read", "/api/weather"), get("stats:read", "/api/prices"), get("prices:read", "/api/prices/flagged"), get("prices:read", "/api/reporters")
     ]);
-    renderWeather(weather); renderPrices(prices, flagged ?? [], reporters ?? []);
+    if (weather) renderWeather(weather);
+    if (prices) renderPrices(prices, flagged ?? [], reporters ?? []);
+    const registrations = await regs;
+    if (registrations) renderRegistrations(registrations);
     if (stats) renderStats(stats);
     if (hotspots) renderHotspots(hotspots);
     if (reports) renderReports(reports);
@@ -451,6 +514,12 @@ function demo() {
   ]);
   renderQuestions(DASH.questions.map((q, i) => ({ id: i, phone: q.farmer, county: q.county, channel: "sms", kind: "text", body: q.q, status: q.status === "Answered" ? "answered" : "open" })));
   renderBroadcasts([]);
+  renderCropPicker([["rice", "Rice (upland)"], ["cassava", "Cassava"]]);
+  $("#rCounty").innerHTML = COUNTIES.map((c) => `<option>${esc(c)}</option>`).join("");
+  renderRegistrations([
+    { id: 1, phone: "+231777000101", county: "Bong", registrar_name: "Lead Farmer Kerkula", status: "joined", sms_sent: 1, details: { name: "Kollie M." } },
+    { id: 2, phone: "+231777000102", county: "Bong", registrar_name: "Lead Farmer Kerkula", status: "waiting", sms_sent: 2, details: { name: "Musu K." } }
+  ]);
   renderWeather(COUNTIES.slice(0, 6).map((county, i) => ({ county, sample: true, days: WEATHER.map((w, d) => ({ t_max: w.hi, rain_prob: i % 3 ? Math.max(5, w.rain - 50) : w.rain })), advice: { level: i % 3 ? "ok" : "rain" } })));
   renderPrices(MARKETS.map((name, mi) => ({ market: "m" + mi, market_name: name, items: PRICES.filter((p) => p.prices[mi]).map((p) => ({ name: p.item, unit: p.unit, price_lrd: p.prices[mi], change_pct: p.change, reported_at: new Date().toISOString() })) })), [], []);
   $("#jobInfo").innerHTML = "Crop-stage advice goes out <b>every day at 07:00</b>. SMS provider: sample data.";
@@ -467,6 +536,7 @@ async function start() {
     names.crops = Object.fromEntries(crops.map((c) => [c.id, c.name]));
     names.pests = Object.fromEntries(pests.pests.map((p) => [p.id, p.name]));
     $("#bCrop").innerHTML = '<option value="">All crops</option>' + crops.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+    renderCropPicker(crops.map((c) => [c.id, c.name]));
   } catch {}
   await refresh();
   updatePreview();

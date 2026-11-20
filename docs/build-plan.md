@@ -155,6 +155,17 @@ SMS and USSD traffic · voice minutes · hosting · phones for testing · transl
 | 2.3 | PostgreSQL: one async database layer for SQLite and PostgreSQL, numbered migrations, PostgreSQL in Docker Compose, backups and restore for both, `sqlite-to-postgres` move script; all tests run on both databases in CI | ✅ Done |
 | 2.4 | Real-phone test with an SMS provider on Lonestar Cell MTN and Orange | Next: needs an SMS account |
 
+### Phase 2 · Sprint 2: ready for the 30–50 farmer field test
+
+Most of the original Sprint 2 list (USSD and app sign-up, consent, STOP, daily advice) was already built during the hackathon, so this sprint focuses on what the field test needs.
+
+| # | Work | Status |
+|---|---|---|
+| S2.1 | Assisted sign-up: lead farmers (new `lead` role) and officers register farmers in their counties; the farmer joins only by replying YES by SMS or on `*347#` (invitations expire after 7 days, max 3 SMS); dashboard form and invitation list | ✅ Done |
+| S2.2 | Farmer management for officers: search, one farmer's history (messages, reports, questions), fix crops and planting months, CSV export for the field-test log | Next |
+| S2.3 | `*347#` profile: change crops and planting month | |
+| S2.4 | Field-test measures: USSD registration completion rate (exit criterion: 80%) and "Did it help? 1 = Yes, 2 = No" follow-up SMS after pest replies | |
+
 ## Next 7 days
 1. Turn every **Must** story in [backlog.md](backlog.md) into a GitHub issue with an owner.
 2. Decide the stack (0.3) and set up the repo folders (0.6).

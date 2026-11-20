@@ -19,7 +19,8 @@ import { farmerRoutes } from "./farmerApi.js";
 import { getForecast, COUNTY_POINTS } from "./weather.js";
 import { recordPrice, latestPrices, allLatestPrices, listFlaggedPrices, setPriceStatus, addReporter, listReporters } from "./prices.js";
 import { staffGuards, staffRoutes, scopeCounties, mustCover } from "./staffAuth.js";
-import { audit, can } from "./staff.js";
+import { audit, can, isAreaLimited, AccessError } from "./staff.js";
+import { createRegistration, listRegistrations, getRegistration, resendRegistration, cancelRegistration, mayManage } from "./registrations.js";
 import { securityHeaders, cors, rateLimit } from "./http.js";
 import { recordError, systemStatus, recentErrors, backupDatabase, listBackupFiles } from "./ops.js";
 
@@ -150,6 +151,35 @@ export function createApp({
       if (isUniqueViolation(err)) return res.status(409).json({ error: "A farmer with this phone number is already registered" });
       throw err;
     }
+  });
+
+  // ---- Assisted sign-up: an officer or lead farmer registers a farmer, who confirms with YES ----
+  app.post("/api/registrations", ...need("registrations:create"), async (req, res) => {
+    const county = findCounty(req.body?.county);
+    if (county) mustCover(req, county);
+    const reg = await createRegistration(ctx, req.body ?? {}, req.staff);
+    await audit(db, req.staff, "registration.create", reg.phone, { county: reg.county });
+    res.status(201).json(reg);
+  });
+  app.get("/api/registrations", ...need("registrations:read"), async (req, res) => {
+    const status = ["waiting", "joined", "refused", "expired", "cancelled"].includes(req.query.status) ? req.query.status : undefined;
+    res.json(await listRegistrations(db, req.staff, { status, limit: intParam(req.query.limit, 100, 500) }));
+  });
+  const ownRegistration = async (req) => {
+    const reg = await getRegistration(db, Number(req.params.id));
+    if (reg && !mayManage(req.staff, reg)) throw new AccessError("This registration was made by someone else", 403);
+    return reg;
+  };
+  app.post("/api/registrations/:id/resend", ...need("registrations:create"), async (req, res) => {
+    if (!(await ownRegistration(req))) return res.status(404).json({ error: "Registration not found" });
+    res.json(await resendRegistration(ctx, Number(req.params.id)));
+  });
+  app.post("/api/registrations/:id/cancel", ...need("registrations:create"), async (req, res) => {
+    const reg = await ownRegistration(req);
+    if (!reg) return res.status(404).json({ error: "Registration not found" });
+    if (!(await cancelRegistration(db, reg.id))) return res.status(400).json({ error: "Only a waiting invitation can be cancelled" });
+    await audit(db, req.staff, "registration.cancel", reg.phone);
+    res.json({ ok: true });
   });
 
   app.get("/api/farmers", ...need("farmers:read"), async (req, res) => {
@@ -296,7 +326,7 @@ export function createApp({
   // ---- Broadcasts: one advisory to many farmers (officers: only their counties) ----
   const broadcastTarget = (req) => {
     const body = req.body ?? {};
-    if (req.staff.role !== "officer") return body;
+    if (!isAreaLimited(req.staff)) return body;
     const counties = (body.counties ?? []).length ? body.counties.map((c) => findCounty(c) ?? c) : req.staff.counties;
     for (const c of counties) mustCover(req, c);
     return { ...body, counties };
@@ -309,14 +339,14 @@ export function createApp({
   });
   app.get("/api/broadcasts", ...need("broadcasts:read"), async (req, res) => {
     const list = await listBroadcasts(db, { limit: intParam(req.query.limit, 20, 200) });
-    const mine = req.staff.role === "officer" ? req.staff.counties : null;
+    const mine = isAreaLimited(req.staff) ? req.staff.counties : null;
     res.json(mine ? list.filter((b) => !b.counties.length || b.counties.some((c) => mine.includes(c))) : list);
   });
 
   // ---- Stats for the dashboard (aggregate numbers only; hotspots limited to an officer's area) ----
   app.get("/api/stats", ...need("stats:read"), async (req, res) => {
     const one = async (sql, ...args) => (await db.get(sql, ...args)).n;
-    const area = req.staff.role === "officer" ? req.staff.counties : undefined;
+    const area = isAreaLimited(req.staff) ? req.staff.counties : undefined;
     const hotspots = await listHotspots(db, content, { counties: area });
     res.json({
       farmers: await one("SELECT COUNT(*) AS n FROM farmers WHERE opted_out_at IS NULL"),

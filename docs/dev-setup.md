@@ -13,7 +13,7 @@ npm install
 ```bash
 npm test
 ```
-You should see `# pass 134` and `# fail 0`.
+You should see `# pass 143` and `# fail 0`.
 
 To run the same tests on PostgreSQL (what servers use), start one with Docker and point the tests at it:
 ```bash
@@ -37,6 +37,9 @@ Everyone who uses the dashboard has their own account. `npm run seed` creates th
 | officer | mulbah@agriconnect.test | demo-officer-2026 | reports, questions, hotspots and advisories for **Bong, Lofa, Nimba only** |
 | editor | editor@agriconnect.test | demo-editor-2026 | market prices, reporters, weather refresh, advice job |
 | viewer | partner@agriconnect.test | demo-viewer-2026 | numbers and hotspots only, no personal data |
+| lead | kerkula@agriconnect.test | demo-lead-2026 | lead farmer: registers farmers in **Bong only**; sees only their own invitations |
+
+**Assisted sign-up.** Officers and lead farmers register farmers on the dashboard (*Register a farmer*). The farmer gets an SMS and **joins only when they reply YES** (or answer the first `*347#` screen). NO, or no answer within 7 days, means nothing is kept. Invitations can be resent at most twice. Only admins can add farmers directly (`POST /api/farmers`, e.g. from signed paper forms).
 
 **Staff & security page** (`/prototype/staff.html`, linked from the dashboard):
 - **Everyone** can change their password and turn on **2-step login**: a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy) on top of the password.
@@ -240,6 +243,9 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | PATCH 🔒 | `/api/staff/:id` | Admin: `{name, role, counties, active}` |
 | POST 🔒 | `/api/staff/:id/reset-password` | Admin: new one-time password (`{reset_2fa: true}` also resets 2-step login) |
 | GET 🔒 | `/api/audit` | Admin: audit log |
+| POST 🔒 | `/api/registrations` | Officer / lead: invite a farmer `{phone, name, county, district, language, crops}` |
+| GET 🔒 | `/api/registrations?status=` | Invitations (lead farmers: only their own; officers: their counties) |
+| POST 🔒 | `/api/registrations/:id/resend` · `/cancel` | Send the invitation again (max 3 in total) / cancel it |
 | GET 🔒 | `/api/admin/status` | Admin: backups, SMS, weather, advice, errors, warnings |
 | POST 🔒 | `/api/admin/backup` | Admin: back up now (needs `BACKUP_DIR`) |
 | GET | `/ready` | 200 only when the app and its database answer (for Docker and uptime monitors) |

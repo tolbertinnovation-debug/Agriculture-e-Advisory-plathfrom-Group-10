@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDb, migrate, toPgParams, sqlNow, sqlDaysAgo, isUniqueViolation, TABLES } from "../src/db.js";
+import { openDb, migrate, MIGRATIONS, toPgParams, sqlNow, sqlDaysAgo, isUniqueViolation, TABLES } from "../src/db.js";
 import { cleanFarmerInput, createFarmer, getFarmerByPhone, listFarmers } from "../src/farmers.js";
 import { createStaff } from "../src/staff.js";
 import { sendSms } from "../src/messaging.js";
@@ -22,7 +22,9 @@ test("placeholders and times", () => {
 test("migrations run once and are recorded", async () => {
   const db = await newDb();
   try {
-    assert.deepEqual((await db.all("SELECT version, name FROM schema_migrations")).map((r) => [Number(r.version), r.name]), [[1, "initial schema"]]);
+    const applied = (await db.all("SELECT version, name FROM schema_migrations ORDER BY version")).map((r) => [Number(r.version), r.name]);
+    assert.deepEqual(applied, MIGRATIONS.map((m) => [m.version, m.name]));
+    assert.deepEqual(applied.map(([v]) => v), applied.map((_, i) => i + 1), "numbered 1, 2, 3… with no gaps");
     assert.deepEqual(await migrate(db), [], "running again changes nothing");
     for (const t of TABLES) assert.equal((await db.get(`SELECT COUNT(*) AS n FROM ${t}`)).n, 0, t);
   } finally {
