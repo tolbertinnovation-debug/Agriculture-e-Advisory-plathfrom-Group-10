@@ -372,7 +372,9 @@ const EVENT = {
   question: (e) => `💬 <b>Question Q-${e.id}</b> <span class="status s-${esc(e.status)}">${esc(e.status)}</span><div>${e.kind === "callback" ? "📞 Wants a call-back" : esc(e.body ?? "")}</div>${e.answer ? `<div class="muted">↳ ${esc(e.answer)} (${esc(e.answered_by ?? "")})</div>` : ""}`,
   registration: (e) => `📝 <b>Invited by ${esc(e.registrar_name ?? "staff")}</b> · ${esc(REG_STATUS[e.status]?.[0] ?? e.status)} · ${e.sms_sent} SMS`,
   joined: (e) => `✅ <b>Joined</b> via ${esc((e.channel ?? "").toUpperCase())}${e.registered_by ? ` (registered by ${esc(e.registered_by)})` : ""}`,
-  opted_out: () => "⛔ <b>Said STOP</b>: gets no SMS until they send START"
+  opted_out: () => "⛔ <b>Said STOP</b>: gets no SMS until they send START",
+  change: (e) => `✏️ <b>Details changed</b> by ${e.by === "farmer" ? "the farmer on *347#" : esc(e.by ?? "staff")}` +
+    Object.entries(e.changes).filter(([k]) => k !== "via").map(([k, [from, to]]) => `<div class="muted">${esc(k)}: ${esc(from ?? "—")} → ${esc(to ?? "—")}</div>`).join("")
 };
 
 function renderEditCrops(crops) {

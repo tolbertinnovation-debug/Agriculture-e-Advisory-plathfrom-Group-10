@@ -130,18 +130,20 @@ const RANK = { joined: 1, registration: 2 }; // same second: show the sign-up be
 
 /** Everything that happened with one farmer, newest first: messages, pest reports, questions, sign-up. */
 export async function farmerHistory(db, farmer, { limit = 200 } = {}) {
-  const [messages, reports, questions, registrations, advice] = await Promise.all([
+  const [messages, reports, questions, registrations, advice, edits] = await Promise.all([
     db.all("SELECT id, channel, direction, body, status, kind, created_at FROM message_log WHERE farmer_id = ? OR phone = ? ORDER BY id DESC LIMIT ?", farmer.id, farmer.phone, limit),
     db.all("SELECT id, crop, symptoms, suggested_pest, match_score, confirmed_pest, channel, status, created_at FROM pest_reports WHERE farmer_id = ? OR phone = ? ORDER BY id DESC LIMIT ?", farmer.id, farmer.phone, limit),
     db.all("SELECT id, kind, channel, body, status, answer, answered_by, created_at, answered_at FROM questions WHERE farmer_id = ? OR phone = ? ORDER BY id DESC LIMIT ?", farmer.id, farmer.phone, limit),
     db.all("SELECT id, registrar_name, status, sms_sent, created_at, answered_at FROM registrations WHERE phone = ? ORDER BY id DESC", farmer.phone),
-    db.all("SELECT crop, stage, sent_at FROM advice_sends WHERE farmer_id = ? ORDER BY id DESC", farmer.id)
+    db.all("SELECT crop, stage, sent_at FROM advice_sends WHERE farmer_id = ? ORDER BY id DESC", farmer.id),
+    db.all("SELECT action, staff_email, detail, created_at FROM audit_log WHERE target = ? AND action IN ('farmer.update', 'farmer.self_update') ORDER BY id DESC LIMIT ?", farmer.phone, limit)
   ]);
   const timeline = [
     ...messages.map((m) => ({ type: "message", at: m.created_at, ...m })),
     ...reports.map((r) => ({ type: "pest_report", at: r.created_at, ...r, symptoms: JSON.parse(r.symptoms) })),
     ...questions.map((q) => ({ type: "question", at: q.created_at, ...q })),
     ...registrations.map((r) => ({ type: "registration", at: r.created_at, ...r })),
+    ...edits.map((e) => ({ type: "change", at: e.created_at, by: e.action === "farmer.self_update" ? "farmer" : e.staff_email, changes: JSON.parse(e.detail ?? "{}") })),
     { type: "joined", at: farmer.created_at, channel: farmer.channel, registered_by: farmer.registered_by },
     ...(farmer.opted_out_at ? [{ type: "opted_out", at: farmer.opted_out_at }] : [])
   ].sort((a, b) => String(b.at).localeCompare(String(a.at)) || (RANK[a.type] ?? 0) - (RANK[b.type] ?? 0));

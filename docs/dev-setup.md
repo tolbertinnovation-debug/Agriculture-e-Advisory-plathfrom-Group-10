@@ -41,6 +41,8 @@ Everyone who uses the dashboard has their own account. `npm run seed` creates th
 
 **Assisted sign-up.** Officers and lead farmers register farmers on the dashboard (*Register a farmer*). The farmer gets an SMS and **joins only when they reply YES** (or answer the first `*347#` screen). NO, or no answer within 7 days, means nothing is kept. Invitations can be resent at most twice. Only admins can add farmers directly (`POST /api/farmers`, e.g. from signed paper forms).
 
+**Farmers change their own crops** on `*347#` → 6 *My profile* → 2 *My crops & planting*: change a planting month, add a crop or remove one (they are asked to confirm first, and the last crop can't be removed). If a new crop stage is due, its advice is sent at once. The change appears in the farmer's history on the dashboard as "changed by the farmer on *347#".
+
 **Farmer management.** The dashboard's *Farmers* card searches by name, district or phone (type `0777 123` or `777123`), and filters by county, crop and STOP status. Click a farmer to see their whole history and to correct their name, district, county, language, crops and planting months; every change goes in the audit log with the old and new values. **Download CSV** gives the same list for the field-test log (Excel and Google Sheets open it; text that looks like a formula is made safe). Officers only find, change and export farmers in their own counties.
 
 **Staff & security page** (`/prototype/staff.html`, linked from the dashboard):
