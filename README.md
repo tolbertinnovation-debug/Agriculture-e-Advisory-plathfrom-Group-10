@@ -45,9 +45,11 @@ Full guide: [docs/dev-setup.md](docs/dev-setup.md). Needs Node.js 22.13 or newer
 - [Product backlog](docs/backlog.md): user stories with priority and acceptance criteria
 - [Screenshots](docs/screenshots/)
 
-## Screens
-| Farmer home | Pest Doctor | USSD |
-|---|---|---|
-| ![home](docs/screenshots/app-home.png) | ![pest](docs/screenshots/app-pest.png) | ![ussd](docs/screenshots/ussd-menu.png) |
+## Screens (the working platform, demo data)
+| Farmer app: home | Pest Doctor (offline) | Weather | Basic phone `*347#` |
+|---|---|---|---|
+| ![home](docs/screenshots/platform/app-home.png) | ![pest](docs/screenshots/platform/app-pest-offline.png) | ![weather](docs/screenshots/platform/app-weather.png) | ![ussd](docs/screenshots/platform/ussd-menu.png) |
 
-![dashboard](docs/screenshots/dashboard.png)
+![Officer dashboard](docs/screenshots/platform/dash-top.png)
+
+More in [docs/screenshots/platform](docs/screenshots/platform). The original design mock-ups are in [docs/screenshots](docs/screenshots).
