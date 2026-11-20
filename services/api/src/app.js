@@ -1,9 +1,18 @@
 // The HTTP API. createApp() takes its database and content so tests can pass in-memory ones.
 import express from "express";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { COUNTIES, findCounty } from "./geo.js";
 import { adviceForFarmer } from "./engine.js";
 import { cleanFarmerInput, createFarmer, getFarmer, listFarmers, countFarmersByCounty } from "./farmers.js";
 import { createPestReport, getPestReport, listPestReports, STATUSES } from "./pestReports.js";
+import { listQuestions, QUESTION_STATUSES } from "./questions.js";
+import { listMessages } from "./messaging.js";
+import { normalizePhone } from "./geo.js";
+import { handleUssd } from "./ussd.js";
+import { handleInboundSms } from "./smsInbound.js";
+
+const PROTOTYPE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../prototype");
 
 const intParam = (v, fallback, max) => {
   const n = Number.parseInt(v, 10);
@@ -11,8 +20,10 @@ const intParam = (v, fallback, max) => {
 };
 
 export function createApp({ db, content, now = () => new Date() }) {
+  const ctx = { db, content, now };
   const app = express();
   app.use(express.json({ limit: "100kb" }));
+  app.use(express.urlencoded({ extended: false, limit: "20kb" })); // USSD/SMS gateways post form data
 
   // Allow the prototype pages (opened from file:// or another port) to call the API during development.
   app.use((req, res, next) => {
@@ -22,6 +33,11 @@ export function createApp({ db, content, now = () => new Date() }) {
     if (req.method === "OPTIONS") return res.sendStatus(204);
     next();
   });
+
+  // The clickable prototype, served by the API so the USSD simulator can talk to it:
+  // http://localhost:3000/prototype/ussd.html
+  app.use("/prototype", express.static(PROTOTYPE_DIR));
+  app.get("/", (req, res) => res.redirect("/prototype/ussd.html"));
 
   app.get("/health", (req, res) => res.json({ ok: true, service: "agriconnect-api", time: now().toISOString() }));
 
@@ -75,6 +91,36 @@ export function createApp({ db, content, now = () => new Date() }) {
     const report = getPestReport(db, Number(req.params.id));
     if (!report) return res.status(404).json({ error: "Report not found" });
     res.json(report);
+  });
+
+  // ---- USSD *347# (telco gateway webhook) ----
+  // Body: phoneNumber, text (answers joined by "*"), plus sessionId/serviceCode which we don't need.
+  app.post("/ussd", (req, res) => {
+    const { phoneNumber, text } = req.body ?? {};
+    const reply = handleUssd(ctx, { phoneNumber, text });
+    res.type("text/plain").send(`${reply.type} ${reply.text}`);
+  });
+
+  // ---- Incoming SMS (telco gateway webhook) ----
+  app.post("/sms/inbound", (req, res) => {
+    const { from, text } = req.body ?? {};
+    const result = handleInboundSms(ctx, { from, text });
+    res.status(result.ok ? 200 : 400).json(result);
+  });
+
+  // ---- Message log (SMS outbox/inbox; the simulator's SMS inbox reads this) ----
+  app.get("/api/messages", (req, res) => {
+    const phone = req.query.phone ? normalizePhone(req.query.phone) : undefined;
+    if (req.query.phone && !phone) return res.status(400).json({ error: "Invalid phone" });
+    res.json(listMessages(db, { phone, limit: intParam(req.query.limit, 50, 500) }));
+  });
+
+  // ---- Questions for officers ----
+  app.get("/api/questions", (req, res) => {
+    const county = req.query.county ? findCounty(req.query.county) : undefined;
+    if (req.query.county && !county) return res.status(400).json({ error: "Unknown county" });
+    if (req.query.status && !QUESTION_STATUSES.includes(req.query.status)) return res.status(400).json({ error: `status must be one of ${QUESTION_STATUSES.join(", ")}` });
+    res.json(listQuestions(db, { county, status: req.query.status, limit: intParam(req.query.limit, 100, 500) }));
   });
 
   // ---- Stats for the dashboard ----

@@ -87,3 +87,15 @@ export function listFarmers(db, { county, limit = 100, offset = 0 } = {}) {
 export function countFarmersByCounty(db) {
   return db.prepare("SELECT county, COUNT(*) AS farmers FROM farmers WHERE opted_out_at IS NULL GROUP BY county ORDER BY farmers DESC").all().map((r) => ({ ...r }));
 }
+
+export function setLanguage(db, farmerId, language) {
+  if (!LANGUAGES.includes(language)) throw new ValidationError([`language: must be one of ${LANGUAGES.join(", ")}`]);
+  db.prepare("UPDATE farmers SET language = ? WHERE id = ?").run(language, farmerId);
+  return getFarmer(db, farmerId);
+}
+
+/** STOP / START: opted-out farmers get no push messages, but can still use USSD. */
+export function setOptedOut(db, farmerId, optedOut) {
+  db.prepare(`UPDATE farmers SET opted_out_at = ${optedOut ? "datetime('now')" : "NULL"} WHERE id = ?`).run(farmerId);
+  return getFarmer(db, farmerId);
+}

@@ -19,14 +19,15 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 
 > All prices, counts and forecasts in the prototype are **sample data**.
 
-## Run the API (step 1 of the build)
+## Run the API (steps 1–2 of the build)
 ```bash
 cd services/api
 npm install
-npm test        # 28 tests
+npm test        # 46 tests
 npm run seed    # demo farmers
-npm run dev     # http://localhost:3000/api/stats
+npm run dev     # then open http://localhost:3000/prototype/ussd.html
 ```
+The USSD simulator goes **LIVE** when the API is running: register on `*347#`, report a pest and watch the SMS replies arrive.
 Full guide: [docs/dev-setup.md](docs/dev-setup.md). Needs Node.js 22.13 or newer; no database to install.
 
 ## Pre-work documents

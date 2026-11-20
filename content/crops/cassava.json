@@ -1,6 +1,7 @@
 {
   "id": "cassava",
   "name": "Cassava",
+  "menu_order": 2,
   "status": "draft",
   "reviewed_by": null,
   "note": "DRAFT for the hackathon. Must be reviewed by a CARI / MOA agronomist before use with farmers.",
