@@ -57,17 +57,18 @@ export function sendBroadcast(db, content, input) {
   const b = cleanBroadcastInput(input, content);
   const recipients = findRecipients(db, b);
   return transaction(db, () => {
-    let delivered = 0;
+    // Messages are queued here; the background sender delivers them (see messaging.js).
+    let queued = 0;
     if (b.channels.includes("sms")) {
       for (const r of recipients) {
-        const sent = sendSms(db, { phone: r.phone, farmerId: r.id, body: b.message });
-        if (!sent.skipped) delivered++;
+        const sent = sendSms(db, { phone: r.phone, farmerId: r.id, body: b.message, kind: "broadcast" });
+        if (!sent.skipped) queued++;
       }
     }
     const { lastInsertRowid } = db
       .prepare("INSERT INTO broadcasts (counties, crops, channels, message, sent_by, reach) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(JSON.stringify(b.counties), JSON.stringify(b.crops), JSON.stringify(b.channels), b.message, b.sent_by, delivered);
-    return { ...getBroadcast(db, Number(lastInsertRowid)), recipients: recipients.length, delivered };
+      .run(JSON.stringify(b.counties), JSON.stringify(b.crops), JSON.stringify(b.channels), b.message, b.sent_by, queued);
+    return { ...getBroadcast(db, Number(lastInsertRowid)), recipients: recipients.length, queued };
   });
 }
 

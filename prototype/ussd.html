@@ -116,7 +116,7 @@ async function loadInbox() {
     if (!res.ok) return;
     const msgs = await res.json();
     $("inbox").innerHTML = msgs.length
-      ? msgs.map((m) => `<div class="msg ${m.direction === "out" ? "out" : "in"}">${escapeHtml(m.body)}<time>${m.direction === "out" ? "From AgriConnect" : "You"} · ${m.created_at.slice(11, 16)}</time></div>`).join("")
+      ? msgs.map((m) => `<div class="msg ${m.direction === "out" ? "out" : "in"}">${escapeHtml(m.body)}<time>${m.direction === "out" ? `From AgriConnect · ${m.status}` : "You"} · ${m.created_at.slice(11, 16)}</time></div>`).join("")
       : '<p class="muted">No messages yet.</p>';
   } catch {}
 }

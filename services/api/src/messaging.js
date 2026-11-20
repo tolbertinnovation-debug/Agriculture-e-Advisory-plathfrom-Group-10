@@ -1,32 +1,94 @@
-// Outbound SMS. Every message is written to message_log first, then handed to a provider.
-// For now the provider is "log" (development): nothing leaves the server and the message
-// is marked sent, so the USSD simulator can show it in its SMS inbox.
-// Step 4 adds a real provider (telco / SMS aggregator) behind the same sendSms() call.
+// Outbound SMS go through a queue:
+//
+//   sendSms()        writes the message to message_log with status "queued" (instant, never blocks)
+//   deliverQueued()  the background sender hands queued messages to the SMS provider,
+//                    retrying failures up to MAX_ATTEMPTS times with growing waits
+//   markDelivery()   the provider's delivery report updates the status to delivered / failed
+//
+// So a broadcast to 10,000 farmers returns at once, and a provider outage only delays messages.
 import { SMS_LIMIT } from "./content.js";
 
-const providers = {
-  log: () => ({ status: "sent" })
-};
+export const MAX_ATTEMPTS = 3;
+export const KINDS = ["reply", "welcome", "advice", "broadcast", "alert"];
 
 export class MessageTooLongError extends Error {}
 
 /**
- * Send one SMS. Returns the logged message, or { skipped: "opted_out" }.
- * force: send even if the farmer said STOP (only for the STOP confirmation itself
- * or for something the farmer asked for directly, like "Get by SMS").
+ * Queue one SMS. Returns the queued message, or { skipped: "opted_out" }.
+ * force: send even if the farmer said STOP. Only for replies to something the farmer
+ * just did (their own SMS, USSD request, report or question), never for push messages.
  */
-export function sendSms(db, { phone, farmerId = null, body, force = false }) {
+export function sendSms(db, { phone, farmerId = null, body, force = false, kind = "reply" }) {
   if (body.length > SMS_LIMIT) throw new MessageTooLongError(`SMS is ${body.length} characters (max ${SMS_LIMIT}): ${body}`);
   if (!force && farmerId != null) {
     const row = db.prepare("SELECT opted_out_at FROM farmers WHERE id = ?").get(farmerId);
     if (row?.opted_out_at) return { skipped: "opted_out" };
   }
-  const provider = providers[process.env.SMS_PROVIDER ?? "log"] ?? providers.log;
-  const { status } = provider({ phone, body });
   const { lastInsertRowid } = db
-    .prepare("INSERT INTO message_log (farmer_id, phone, channel, direction, body, status) VALUES (?, ?, 'sms', 'out', ?, ?)")
-    .run(farmerId, phone, body, status);
+    .prepare("INSERT INTO message_log (farmer_id, phone, channel, direction, body, status, kind) VALUES (?, ?, 'sms', 'out', ?, 'queued', ?)")
+    .run(farmerId, phone, body, KINDS.includes(kind) ? kind : "reply");
   return getMessage(db, Number(lastInsertRowid));
+}
+
+/**
+ * Send up to `limit` queued messages through the provider. Safe to call often.
+ * Returns { sent, retrying, failed }.
+ */
+export async function deliverQueued(db, provider, { limit = 50, now = new Date() } = {}) {
+  const nowIso = now.toISOString();
+  const due = db
+    .prepare(
+      `SELECT * FROM message_log
+        WHERE direction = 'out' AND channel = 'sms' AND status = 'queued'
+          AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+        ORDER BY id LIMIT ?`
+    )
+    .all(nowIso, limit);
+  const summary = { sent: 0, retrying: 0, failed: 0 };
+  for (const m of due) {
+    // Claim it first so a second sender running at the same time skips it.
+    const claimed = db.prepare("UPDATE message_log SET status = 'sending' WHERE id = ? AND status = 'queued'").run(m.id);
+    if (!claimed.changes) continue;
+    let result;
+    try {
+      result = await provider.send({ to: m.phone, body: m.body });
+    } catch (err) {
+      result = { ok: false, error: err.message, retry: true };
+    }
+    const attempts = m.attempts + 1;
+    if (result.ok) {
+      db.prepare("UPDATE message_log SET status = 'sent', attempts = ?, provider_id = ?, sent_at = ?, last_error = NULL WHERE id = ?")
+        .run(attempts, result.id ?? null, nowIso, m.id);
+      summary.sent++;
+    } else if (result.retry && attempts < MAX_ATTEMPTS) {
+      const wait = 2 ** attempts * 60 * 1000; // 2 min, then 4 min
+      db.prepare("UPDATE message_log SET status = 'queued', attempts = ?, last_error = ?, next_attempt_at = ? WHERE id = ?")
+        .run(attempts, String(result.error).slice(0, 300), new Date(now.getTime() + wait).toISOString(), m.id);
+      summary.retrying++;
+    } else {
+      db.prepare("UPDATE message_log SET status = 'failed', attempts = ?, last_error = ? WHERE id = ?")
+        .run(attempts, String(result.error).slice(0, 300), m.id);
+      summary.failed++;
+    }
+  }
+  return summary;
+}
+
+/** After a crash, messages stuck in "sending" go back to the queue. */
+export function requeueStuck(db) {
+  return db.prepare("UPDATE message_log SET status = 'queued' WHERE status = 'sending'").run().changes;
+}
+
+/** Delivery report from the provider. Accepts the common wordings. */
+export function markDelivery(db, providerId, providerStatus) {
+  if (!providerId) return false;
+  const s = String(providerStatus ?? "").toLowerCase();
+  const status = ["success", "delivered", "delivrd"].includes(s) ? "delivered"
+    : ["failed", "rejected", "undelivered", "expired", "undeliv"].includes(s) ? "failed"
+    : null;
+  if (!status) return false;
+  return db.prepare("UPDATE message_log SET status = ?, last_error = ? WHERE provider_id = ? AND direction = 'out'")
+    .run(status, status === "failed" ? `delivery report: ${providerStatus}` : null, String(providerId)).changes > 0;
 }
 
 export function logInbound(db, { phone, farmerId = null, channel = "sms", body }) {
@@ -39,9 +101,24 @@ export function getMessage(db, id) {
   return row ? { ...row } : null;
 }
 
-export function listMessages(db, { phone, limit = 50 } = {}) {
-  const rows = phone
-    ? db.prepare("SELECT * FROM message_log WHERE phone = ? ORDER BY id DESC LIMIT ?").all(phone, limit)
-    : db.prepare("SELECT * FROM message_log ORDER BY id DESC LIMIT ?").all(limit);
-  return rows.map((r) => ({ ...r }));
+export function listMessages(db, { phone, status, limit = 50 } = {}) {
+  const where = [];
+  const args = [];
+  if (phone) { where.push("phone = ?"); args.push(phone); }
+  if (status) { where.push("status = ?"); args.push(status); }
+  return db
+    .prepare(`SELECT * FROM message_log ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY id DESC LIMIT ?`)
+    .all(...args, limit)
+    .map((r) => ({ ...r }));
+}
+
+export function messageStats(db) {
+  const rows = db.prepare("SELECT status, COUNT(*) AS n FROM message_log WHERE direction = 'out' GROUP BY status").all();
+  const by = Object.fromEntries(rows.map((r) => [r.status, r.n]));
+  return {
+    queued: (by.queued ?? 0) + (by.sending ?? 0),
+    sent: (by.sent ?? 0) + (by.delivered ?? 0),
+    delivered: by.delivered ?? 0,
+    failed: by.failed ?? 0
+  };
 }

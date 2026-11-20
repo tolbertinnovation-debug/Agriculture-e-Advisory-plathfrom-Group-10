@@ -13,7 +13,7 @@ npm install
 ```bash
 npm test
 ```
-You should see `# pass 56` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
+You should see `# pass 71` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
 
 ## 3. Add demo data and start the API
 ```bash
@@ -41,7 +41,38 @@ Open **http://localhost:3000/prototype/dashboard.html** next to the USSD simulat
 4. Answer a question in **Farmer questions**: the reply arrives on the farmer's phone. For call-back requests, click **Mark as called** after you call.
 5. Click **Warn farmers** on the hotspot: the advisory form fills in. Check the reach number, then **Send to farmers**. The warning arrives on every matching phone in the simulator.
 
-## 6. Try the API directly
+## 6. Automatic crop advice and real SMS (step 4)
+**How messages flow.** Every SMS is first saved in a queue (`message_log`, status `queued`). A background sender inside the API delivers queued messages every 2 seconds through the SMS provider. If the provider is down, it retries after 2 and then 4 minutes, and after 3 attempts marks the message `failed`. Delivery reports from the provider (`POST /sms/status`) turn `sent` into `delivered`. A broadcast to thousands of farmers returns at once.
+
+**Daily crop advice.** Every day at 07:00 Liberia time (`ADVICE_HOUR`), each farmer gets the advice for their crop's current stage:
+- only when they reach a **new stage**, with a reminder at most every **28 days** in long stages;
+- at most **3 advice SMS per farmer per week**;
+- never to farmers who replied STOP, and nothing between seasons.
+
+If the server starts after 07:00 and today's run hasn't happened, it runs straight away. On the dashboard, the **Automatic advice & SMS** card shows the next run, the last result and the SMS counts. Use **Preview** (sends nothing) or **Send due advice now**. Set `SCHEDULER=off` to stop the daily job, e.g. while testing.
+
+**Connect a real SMS company.** Nothing else in the code changes: choose the provider with environment variables.
+
+| `SMS_PROVIDER` | Settings | Notes |
+|---|---|---|
+| `log` (default) | none | Development. Messages are recorded and shown in the simulator, never sent. |
+| `africastalking` | `AT_USERNAME`, `AT_API_KEY`, optional `AT_SENDER_ID`, `AT_SANDBOX=1` | Also offers USSD in the same `CON/END` format our `/ussd` uses. **Confirm it covers Liberian networks for your account first.** Point its delivery-report URL to `/sms/status`. |
+| `http` | `SMS_HTTP_URL`, `SMS_HTTP_TOKEN`, optional `SMS_SENDER_ID` | Any provider or telco with a simple JSON API: we POST `{to, message, from}` with `Authorization: Bearer <token>`. If theirs differs, copy `httpProvider` in `src/providers/index.js` and adjust. |
+
+Example (Mac/Linux; on Windows use `set NAME=value` first):
+```bash
+SMS_PROVIDER=africastalking AT_USERNAME=sandbox AT_API_KEY=your-key AT_SANDBOX=1 npm start
+```
+**Never put keys in the code or commit them to GitHub.** Use environment variables or your hosting platform's "secrets" settings.
+
+### Checklist before real farmers use it
+- [ ] `OFFICER_TOKEN` set (dashboard access code)
+- [ ] `WEBHOOK_SECRET` set, and the gateway URLs end in `?secret=<WEBHOOK_SECRET>`: `/ussd`, `/sms/inbound`, `/sms/status`
+- [ ] SMS provider tested with the team's own phones on each network (Lonestar Cell MTN and Orange)
+- [ ] All content reviewed by an agronomist (`"status": "draft"` → `"approved"`)
+- [ ] HTTPS in front of the server, daily database backups
+
+## 7. Try the API directly
 Open these in your browser:
 - http://localhost:3000/health
 - http://localhost:3000/api/stats: farmers by county
@@ -79,6 +110,8 @@ services/api/
   src/questions.js    Ask an Expert questions, call-back requests and officer answers
   src/hotspots.js     hotspot rule: 3+ reports of one pest in one county within 7 days
   src/broadcasts.js   officer advisories to many farmers (by county and crop, skips STOP)
+  src/scheduler.js    daily crop advice job (stage changes, 28-day reminders, 3/week cap) + background sender
+  src/providers/      SMS providers: log (development), africastalking, http
   src/db.js           database tables
   src/content.js      loads and checks /content
   scripts/seed.js     demo data
@@ -86,7 +119,7 @@ services/api/
 prototype/            clickable demo screens (no server needed)
 ```
 
-## API (steps 1–3)
+## API (steps 1–4)
 
 Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 
@@ -114,6 +147,9 @@ Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 | POST 🔒 | `/api/broadcasts/preview` | `{counties, crops}` → how many farmers it would reach |
 | POST 🔒 | `/api/broadcasts` | `{counties, crops, channels, message}` → sends the SMS |
 | GET 🔒 | `/api/broadcasts` | Advisories already sent |
+| GET 🔒 | `/api/jobs` | Daily advice schedule, last runs, SMS queue counts |
+| POST 🔒 | `/api/jobs/advice/run` | `{dry_run: true}` to preview, `{}` to send due advice now |
+| POST | `/sms/status` | Delivery reports from the SMS provider: `{id, status}` |
 
 ## Settings (environment variables)
 | Name | Default | Meaning |
@@ -121,7 +157,10 @@ Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 | `PORT` | `3000` | Port the API listens on |
 | `DB_PATH` | `services/api/data/agriconnect.db` | Database file (delete it to start fresh) |
 | `CONTENT_DIR` | `content/` | Where the advisory content lives |
-| `SMS_PROVIDER` | `log` | `log` = record messages but don't send them (development) |
+| `SMS_PROVIDER` | `log` | `log`, `africastalking` or `http`; see section 6 |
+| `ADVICE_HOUR` | `7` | Hour (Liberia time = UTC) for the daily crop advice |
+| `SCHEDULER` | *(on)* | `off` = don't run the daily advice job |
+| `WEBHOOK_SECRET` | *(unset)* | When set, `/ussd`, `/sms/inbound` and `/sms/status` need `?secret=…` or header `X-Webhook-Secret` |
 | `OFFICER_TOKEN` | *(unset)* | Access code for 🔒 officer routes. Unset = open (fine on your laptop). **Always set it on a server others can reach**; the dashboard then asks for it. Real staff accounts come in MVP Sprint 1. |
 
 ## USSD menu (live)

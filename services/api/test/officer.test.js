@@ -92,7 +92,7 @@ test("broadcast reaches only matching farmers who have not said STOP", async () 
   const msg = "Fall armyworm seen in Nimba. Check your fields this week. Dial *347# option 4 to report.";
   const sent = await api.call("POST", "/api/broadcasts", { ...target, message: msg, sent_by: "Officer Mulbah" });
   assert.equal(sent.status, 201);
-  assert.equal(sent.body.delivered, 1);
+  assert.equal(sent.body.queued, 1);
   assert.equal((await inbox("0777000001"))[0], msg);
   assert.equal((await inbox("0777000002")).length, 0); // cassava only: not targeted
   assert.equal((await inbox("0777000004")).length, 1); // only the STOP confirmation, not the broadcast

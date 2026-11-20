@@ -75,20 +75,76 @@ CREATE TABLE IF NOT EXISTS message_log (
   channel    TEXT NOT NULL,                        -- sms | ussd | voice | app
   direction  TEXT NOT NULL,                        -- in | out
   body       TEXT NOT NULL,
-  status     TEXT NOT NULL DEFAULT 'queued',       -- queued | sent | delivered | failed
+  status     TEXT NOT NULL DEFAULT 'queued',       -- queued | sending | sent | delivered | failed | received
+  kind       TEXT NOT NULL DEFAULT 'reply',        -- reply | welcome | advice | broadcast | alert
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT,                            -- when a failed send may be retried
+  provider_id TEXT,                                -- the SMS provider's message id (for delivery reports)
+  last_error TEXT,
+  sent_at    TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Which crop-stage advice each farmer has received, so the daily job never repeats itself.
+CREATE TABLE IF NOT EXISTS advice_sends (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  farmer_id  INTEGER NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+  crop       TEXT NOT NULL,
+  stage      TEXT NOT NULL,
+  message_id INTEGER REFERENCES message_log(id),
+  sent_at    TEXT NOT NULL                         -- ISO time from the engine's clock
+);
+
+-- Scheduled and manual job runs (e.g. the daily advice job).
+CREATE TABLE IF NOT EXISTS job_runs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  job         TEXT NOT NULL,
+  run_date    TEXT NOT NULL,                       -- YYYY-MM-DD (Liberia time = UTC)
+  trigger     TEXT NOT NULL,                       -- schedule | manual
+  result      TEXT,                                -- JSON summary
+  started_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_farmers_county ON farmers(county);
 CREATE INDEX IF NOT EXISTS idx_reports_county_status ON pest_reports(county, status);
 CREATE INDEX IF NOT EXISTS idx_questions_status ON questions(status);
+CREATE INDEX IF NOT EXISTS idx_advice_sends_farmer ON advice_sends(farmer_id, crop, stage);
+CREATE INDEX IF NOT EXISTS idx_job_runs ON job_runs(job, run_date);
 `;
+
+// Columns added after the first release. Old databases get them automatically
+// (SQLite cannot add them in CREATE TABLE IF NOT EXISTS). Indexes that use them come after.
+const ADDED_COLUMNS = {
+  message_log: {
+    kind: "TEXT NOT NULL DEFAULT 'reply'",
+    attempts: "INTEGER NOT NULL DEFAULT 0",
+    next_attempt_at: "TEXT",
+    provider_id: "TEXT",
+    last_error: "TEXT",
+    sent_at: "TEXT"
+  }
+};
+const LATE_INDEXES = `
+CREATE INDEX IF NOT EXISTS idx_message_queue ON message_log(status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_message_provider ON message_log(provider_id);
+`;
+
+function migrate(db) {
+  for (const [table, columns] of Object.entries(ADDED_COLUMNS)) {
+    const existing = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+    for (const [name, type] of Object.entries(columns)) {
+      if (!existing.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
+    }
+  }
+  db.exec(LATE_INDEXES);
+}
 
 export function openDb(path = ":memory:") {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.exec("PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
+  migrate(db);
   return db;
 }
 

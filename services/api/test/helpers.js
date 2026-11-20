@@ -11,7 +11,7 @@ export const content = loadContent(CONTENT_DIR);
 /** Start the API on a random port with an empty in-memory database. */
 export async function startTestServer({ now, officerToken = "" } = {}) {
   const db = openDb(":memory:");
-  const app = createApp({ db, content, now, officerToken });
+  const app = createApp({ db, content, now, officerToken, webhookSecret: "" });
   const server = await new Promise((ok) => {
     const s = app.listen(0, () => ok(s));
   });

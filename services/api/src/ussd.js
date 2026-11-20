@@ -18,6 +18,7 @@ import { createFarmer, getFarmerByPhone, setLanguage, setOptedOut } from "./farm
 import { createPestReport } from "./pestReports.js";
 import { createQuestion } from "./questions.js";
 import { sendSms } from "./messaging.js";
+import { sendAdviceToFarmer } from "./scheduler.js";
 
 export const USSD_MAX = 182;
 
@@ -84,7 +85,7 @@ function askCounty(s) {
 // ---------------------------------------------------------------- flows
 
 function register(ctx, s, phone) {
-  const { db, content, now } = ctx;
+  const { db, content } = ctx;
   const language = s.choose("Choose language:", LANGUAGE_OPTIONS);
   const county = askCounty(s);
 
@@ -111,10 +112,12 @@ function register(ctx, s, phone) {
   sendSms(db, {
     phone,
     farmerId: farmer.id,
-    body: `Welcome to AgriConnect! You are registered in ${county} County. Farm advice is free. Reply STOP to stop. Dial *347# for help.`
+    body: `Welcome to AgriConnect! You are registered in ${county} County. Farm advice is free. Reply STOP to stop. Dial *347# for help.`,
+    kind: "welcome"
   });
   // Send this week's advice straight away so the farmer sees value on day one.
-  for (const a of adviceForFarmer(farmer, content, now())) if (a.message) sendSms(db, { phone, farmerId: farmer.id, body: a.message });
+  // (Recorded like the daily job's advice, so the farmer does not get it twice.)
+  sendAdviceToFarmer(ctx, farmer);
   return end("Thank you! You are registered.\nCheck your SMS for your first farm advice.");
 }
 

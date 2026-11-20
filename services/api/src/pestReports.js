@@ -103,7 +103,7 @@ export function updatePestReport(db, content, id, input) {
     const body = name
       ? `AgriConnect: an extension officer confirmed ${name.toUpperCase()} (Ref PR-${id}). Follow the steps we sent. Dial *347# option 5 for a call-back.`
       : `AgriConnect: an extension officer checked your report (Ref PR-${id}) and will call you. Dial *347# for help.`;
-    sendSms(db, { phone: updated.phone, farmerId: updated.farmer_id, body, force: true });
+    sendSms(db, { phone: updated.phone, farmerId: updated.farmer_id, body, force: true, kind: "alert" });
     notified = true;
   }
   return { report: updated, notified };

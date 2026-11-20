@@ -10,7 +10,8 @@ import { createPestReport, getPestReport, listPestReports, updatePestReport, STA
 import { listQuestions, answerQuestion, QUESTION_STATUSES } from "./questions.js";
 import { listHotspots } from "./hotspots.js";
 import { previewBroadcast, sendBroadcast, listBroadcasts } from "./broadcasts.js";
-import { listMessages } from "./messaging.js";
+import { listMessages, markDelivery, messageStats } from "./messaging.js";
+import { runAdviceJob, lastJobRuns, nextAdviceRun } from "./scheduler.js";
 import { normalizePhone } from "./geo.js";
 import { handleUssd } from "./ussd.js";
 import { handleInboundSms } from "./smsInbound.js";
@@ -38,9 +39,31 @@ function officerGuard(token) {
   };
 }
 
-export function createApp({ db, content, now = () => new Date(), officerToken = process.env.OFFICER_TOKEN }) {
+/**
+ * Webhooks called by the telco / SMS provider (/ussd, /sms/inbound, /sms/status).
+ * When WEBHOOK_SECRET is set, the gateway must call ...?secret=<WEBHOOK_SECRET>
+ * (or send header X-Webhook-Secret), so nobody else can fake farmer messages.
+ */
+function webhookGuard(secret) {
+  if (!secret) return (req, res, next) => next();
+  const expected = Buffer.from(secret);
+  return (req, res, next) => {
+    const given = Buffer.from(String(req.get("x-webhook-secret") ?? req.query.secret ?? ""));
+    if (given.length === expected.length && timingSafeEqual(given, expected)) return next();
+    res.status(401).type("text/plain").send("END Not allowed");
+  };
+}
+
+export function createApp({
+  db, content, now = () => new Date(),
+  officerToken = process.env.OFFICER_TOKEN,
+  webhookSecret = process.env.WEBHOOK_SECRET,
+  adviceHour = Number(process.env.ADVICE_HOUR ?? 7),
+  providerName = process.env.SMS_PROVIDER ?? "log"
+}) {
   const ctx = { db, content, now };
   const officer = officerGuard(officerToken);
+  const gateway = webhookGuard(webhookSecret);
   const app = express();
   app.use(express.json({ limit: "100kb" }));
   app.use(express.urlencoded({ extended: false, limit: "20kb" })); // USSD/SMS gateways post form data
@@ -115,17 +138,35 @@ export function createApp({ db, content, now = () => new Date(), officerToken = 
 
   // ---- USSD *347# (telco gateway webhook) ----
   // Body: phoneNumber, text (answers joined by "*"), plus sessionId/serviceCode which we don't need.
-  app.post("/ussd", (req, res) => {
+  app.post("/ussd", gateway, (req, res) => {
     const { phoneNumber, text } = req.body ?? {};
     const reply = handleUssd(ctx, { phoneNumber, text });
     res.type("text/plain").send(`${reply.type} ${reply.text}`);
   });
 
   // ---- Incoming SMS (telco gateway webhook) ----
-  app.post("/sms/inbound", (req, res) => {
+  app.post("/sms/inbound", gateway, (req, res) => {
     const { from, text } = req.body ?? {};
     const result = handleInboundSms(ctx, { from, text });
     res.status(result.ok ? 200 : 400).json(result);
+  });
+
+  // ---- Delivery reports from the SMS provider ----
+  // Accepts { id | messageId, status } (Africa's Talking sends id + status=Success/Failed).
+  app.post("/sms/status", gateway, (req, res) => {
+    const { id, messageId, status } = req.body ?? {};
+    res.json({ ok: true, updated: markDelivery(db, id ?? messageId, status) });
+  });
+
+  // ---- Jobs: the daily advice job ----
+  app.get("/api/jobs", officer, (req, res) => {
+    res.json({
+      advice: { hour_utc: adviceHour, next_run: nextAdviceRun(now(), adviceHour).toISOString(), last_runs: lastJobRuns(db, "advice") },
+      sms: { provider: providerName, ...messageStats(db) }
+    });
+  });
+  app.post("/api/jobs/advice/run", officer, (req, res) => {
+    res.json(runAdviceJob(ctx, { dryRun: req.body?.dry_run === true, trigger: "manual" }));
   });
 
   // ---- Message log (SMS outbox/inbox; the simulator's SMS inbox reads this) ----
@@ -174,7 +215,8 @@ export function createApp({ db, content, now = () => new Date(), officerToken = 
     res.json({
       farmers: one("SELECT COUNT(*) AS n FROM farmers WHERE opted_out_at IS NULL"),
       farmers_new_30d: one("SELECT COUNT(*) AS n FROM farmers WHERE created_at >= datetime('now', '-30 days')"),
-      sms_sent: one("SELECT COUNT(*) AS n FROM message_log WHERE direction = 'out'"),
+      sms_sent: one("SELECT COUNT(*) AS n FROM message_log WHERE direction = 'out' AND status IN ('sent', 'delivered')"),
+      sms: messageStats(db),
       pest_reports_7d: one("SELECT COUNT(*) AS n FROM pest_reports WHERE created_at >= datetime('now', '-7 days')"),
       reports_to_check: one("SELECT COUNT(*) AS n FROM pest_reports WHERE status = 'new'"),
       open_questions: one("SELECT COUNT(*) AS n FROM questions WHERE status = 'open'"),

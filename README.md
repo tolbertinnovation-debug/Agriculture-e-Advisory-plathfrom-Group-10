@@ -19,11 +19,11 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 
 > All prices, counts and forecasts in the prototype are **sample data**.
 
-## Run the API (steps 1–3 of the build)
+## Run the API (steps 1–4 of the build)
 ```bash
 cd services/api
 npm install
-npm test        # 56 tests
+npm test        # 71 tests
 npm run seed    # demo farmers
 npm run dev     # then open http://localhost:3000/prototype/ussd.html
 ```

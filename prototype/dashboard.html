@@ -89,6 +89,9 @@
       <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
         <div class="card" id="hotspots"><h3>⚠ Hotspots (7 days) <span class="muted">3+ reports, same pest &amp; county</span></h3><div class="scroll"><table id="hotspotTable"></table></div></div>
         <div class="card"><h3>How farmers joined</h3><div class="stack" id="stack"></div><div class="legend" id="legend"></div></div>
+        <div class="card" id="jobs"><h3>🤖 Automatic advice &amp; SMS</h3><div id="jobInfo" class="muted">…</div>
+          <div class="actions" style="margin-top:10px"><button class="act ghost" onclick="runAdvice(true)">Preview</button><button class="act" onclick="runAdvice(false)">Send due advice now</button></div>
+        </div>
       </div>
     </div>
 
@@ -162,7 +165,7 @@ function saveToken() { store("officerToken", $("#token").value.trim()); $("#logi
 function renderStats(s) {
   $("#kpis").innerHTML = [
     ["Registered farmers", n(s.farmers), `+${n(s.farmers_new_30d)} in the last 30 days`],
-    ["SMS sent", n(s.sms_sent), "advice, replies and alerts"],
+    ["SMS sent", n(s.sms_sent), s.sms ? `${n(s.sms.queued)} waiting · ${n(s.sms.failed)} failed` : "advice, replies and alerts", s.sms?.failed > 0],
     ["Reports to check", n(s.reports_to_check), `${n(s.pest_reports_7d)} reports in 7 days`, s.reports_to_check > 0],
     ["Open questions", n(s.open_questions), `${n(s.hotspots)} hotspot(s) in ${n(s.counties_flagged)} county(ies)`, s.open_questions > 0]
   ].map(([l, v, d, alert]) => `<div class="card kpi ${alert ? "alert" : ""}"><div class="l">${l}</div><div class="v">${v}</div><div class="muted">${d}</div></div>`).join("");
@@ -278,22 +281,41 @@ async function broadcast() {
   $("#bSend").disabled = true;
   try {
     const b = await api("POST", "/api/broadcasts", { ...target(), channels: ["sms"], message: $("#bMsg").value, sent_by: "Officer Mulbah" });
-    toast(`✅ Sent to ${n(b.delivered)} farmers.`);
+    toast(`✅ Queued for ${n(b.queued)} farmers. They go out within seconds.`);
     refresh();
   } catch (e) { toast(e.message, true); }
   $("#bSend").disabled = false;
+}
+
+function renderJobs(j) {
+  const last = j.advice.last_runs[0];
+  const when = (iso) => new Date(iso).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+  $("#jobInfo").innerHTML =
+    `Crop-stage advice goes out <b>every day at ${String(j.advice.hour_utc).padStart(2, "0")}:00</b> (next: ${esc(when(j.advice.next_run))}).<br>` +
+    (last ? `Last run: ${esc(last.trigger)}, ${esc(last.started_at.slice(0, 16))} UTC: ${n(last.result.sent)} sent, ${n(last.result.recent)} already had it, ${n(last.result.cap)} over the weekly limit.<br>` : "No run yet.<br>") +
+    `SMS provider: <b>${esc(j.sms.provider)}</b>${j.sms.provider === "log" ? " (development: not sent to real phones)" : ""} · ${n(j.sms.sent)} sent · ${n(j.sms.delivered)} delivered · ${n(j.sms.queued)} waiting · ${n(j.sms.failed)} failed`;
+}
+
+async function runAdvice(dryRun) {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  if (!dryRun && !confirm("Send crop advice now to every farmer who is due for it?")) return;
+  try {
+    const r = await api("POST", "/api/jobs/advice/run", { dry_run: dryRun });
+    toast(`${dryRun ? "Preview: would send" : "Queued"} ${n(r.sent)} advice SMS for ${n(r.farmers)} farmers (${n(r.recent)} already have this week's advice, ${n(r.no_advice)} between seasons).`);
+    refresh();
+  } catch (e) { toast(e.message, true); }
 }
 
 // ---------------- data loading ----------------
 async function refresh() {
   if (!live) return;
   try {
-    const [stats, hotspots, reports, questions, broadcasts] = await Promise.all([
+    const [stats, hotspots, reports, questions, broadcasts, jobs] = await Promise.all([
       api("GET", "/api/stats"), api("GET", "/api/hotspots"), api("GET", "/api/pest-reports?limit=25"),
-      api("GET", "/api/questions?limit=25"), api("GET", "/api/broadcasts")
+      api("GET", "/api/questions?limit=25"), api("GET", "/api/broadcasts"), api("GET", "/api/jobs")
     ]);
     $("#login").style.display = "none";
-    renderStats(stats); renderHotspots(hotspots); renderReports(reports); renderQuestions(questions); renderBroadcasts(broadcasts);
+    renderStats(stats); renderHotspots(hotspots); renderReports(reports); renderQuestions(questions); renderBroadcasts(broadcasts); renderJobs(jobs);
   } catch (e) { if (e.message !== "Officer login required") console.error(e); }
 }
 
@@ -314,6 +336,7 @@ function demo() {
   ]);
   renderQuestions(DASH.questions.map((q, i) => ({ id: i, phone: q.farmer, county: q.county, channel: "sms", kind: "text", body: q.q, status: q.status === "Answered" ? "answered" : "open" })));
   renderBroadcasts([]);
+  $("#jobInfo").innerHTML = "Crop-stage advice goes out <b>every day at 07:00</b>. SMS provider: sample data.";
 }
 
 (async () => {
