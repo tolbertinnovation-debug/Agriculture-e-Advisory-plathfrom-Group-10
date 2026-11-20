@@ -139,8 +139,8 @@ SMS and USSD traffic · voice minutes · hosting · phones for testing · transl
 |---|---|---|
 | 1 | Foundation: API, database, content files, advisory engine, pest diagnosis, tests, CI (`services/api`, `content/`) | ✅ Done, see [dev-setup.md](dev-setup.md) |
 | 2 | USSD `*347#` and SMS: register, advice, report pest, ask expert, profile; SMS keywords HELP/ASK/STOP/START; simulator connected live | ✅ Done |
-| 3 | Officer dashboard connected: live reports, hotspots, broadcast | Next |
-| 4 | Weekly crop advice sent automatically (scheduler + message queue) | |
+| 3 | Officer dashboard connected: live reports with verify/reject, automatic hotspots, answer questions by SMS, broadcast by county and crop | ✅ Done |
+| 4 | Weekly crop advice sent automatically (scheduler + message queue) + a real SMS provider | Next |
 | 5 | Farmer app connected to the API, offline sync | |
 | 6 | Ask an Expert, weather, market prices | |
 

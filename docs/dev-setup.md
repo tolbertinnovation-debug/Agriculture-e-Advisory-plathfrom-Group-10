@@ -13,11 +13,11 @@ npm install
 ```bash
 npm test
 ```
-You should see `# pass 46` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
+You should see `# pass 56` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
 
 ## 3. Add demo data and start the API
 ```bash
-npm run seed     # 6 demo farmers + 3 pest reports
+npm run seed     # 6 demo farmers, 5 pest reports (a Nimba hotspot) and 3 questions
 npm run dev      # starts on http://localhost:3000 and restarts when you save a file
 ```
 
@@ -32,7 +32,16 @@ With the API running, open **http://localhost:3000/prototype/ussd.html**. The ba
 
 The simulator talks to the API exactly like a telco gateway: `POST /ussd` with `phoneNumber` and `text` (all answers joined by `*`), and the API answers `CON …` (wait for the next answer) or `END …` (close). When we get a real short code, the gateway points to the same URL.
 
-## 5. Try the API directly
+## 5. Try the officer dashboard (the full loop)
+Open **http://localhost:3000/prototype/dashboard.html** next to the USSD simulator. The badge says **LIVE data**, and it refreshes every 5 seconds.
+
+1. On the simulator, register 3 farmers in the same county (use **New** for each number) and have each report *Worms eating leaves* (`*347#` → 4 → 1 → 1).
+2. On the dashboard, a **hotspot** appears for that county (3+ reports of one pest, same county, 7 days).
+3. Click **Verify** on a report: the farmer gets an SMS saying an officer confirmed it.
+4. Answer a question in **Farmer questions**: the reply arrives on the farmer's phone. For call-back requests, click **Mark as called** after you call.
+5. Click **Warn farmers** on the hotspot: the advisory form fills in. Check the reach number, then **Send to farmers**. The warning arrives on every matching phone in the simulator.
+
+## 6. Try the API directly
 Open these in your browser:
 - http://localhost:3000/health
 - http://localhost:3000/api/stats: farmers by county
@@ -67,7 +76,9 @@ services/api/
   src/ussd.js         *347# menus (register, advice, report pest, ask expert, profile)
   src/smsInbound.js   incoming SMS keywords: HELP, ASK, STOP, START
   src/messaging.js    outgoing SMS (logged; real telco provider comes in step 4)
-  src/questions.js    Ask an Expert questions and call-back requests
+  src/questions.js    Ask an Expert questions, call-back requests and officer answers
+  src/hotspots.js     hotspot rule: 3+ reports of one pest in one county within 7 days
+  src/broadcasts.js   officer advisories to many farmers (by county and crop, skips STOP)
   src/db.js           database tables
   src/content.js      loads and checks /content
   scripts/seed.js     demo data
@@ -75,7 +86,9 @@ services/api/
 prototype/            clickable demo screens (no server needed)
 ```
 
-## API (steps 1–2)
+## API (steps 1–3)
+
+Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 
 | Method | Path | What it does |
 |---|---|---|
@@ -84,17 +97,23 @@ prototype/            clickable demo screens (no server needed)
 | GET | `/api/content/crops` | Crop calendars |
 | GET | `/api/content/pests` | Symptom codes and pests |
 | POST | `/api/farmers` | Register a farmer (needs `consent: true`) |
-| GET | `/api/farmers?county=Bong` | List farmers |
-| GET | `/api/farmers/:id` | One farmer |
-| GET | `/api/farmers/:id/advice` | This week's advice for each crop |
+| GET 🔒 | `/api/farmers?county=Bong` | List farmers |
+| GET 🔒 | `/api/farmers/:id` | One farmer |
+| GET 🔒 | `/api/farmers/:id/advice` | This week's advice for each crop |
 | POST | `/api/pest-reports` | Report a pest; returns diagnosis + reply SMS |
-| GET | `/api/pest-reports?county=&status=` | List reports for officers |
-| GET | `/api/pest-reports/:id` | One report |
-| GET | `/api/stats` | Numbers for the dashboard |
+| GET 🔒 | `/api/pest-reports?county=&status=` | List reports for officers |
+| GET 🔒 | `/api/pest-reports/:id` | One report |
+| GET 🔒 | `/api/stats` | Numbers for the dashboard |
 | POST | `/ussd` | USSD gateway webhook (`phoneNumber`, `text`) → `CON …` / `END …` |
 | POST | `/sms/inbound` | Incoming SMS (`from`, `text`): HELP, ASK, STOP, START |
-| GET | `/api/messages?phone=` | SMS sent and received (the simulator's inbox) |
-| GET | `/api/questions?county=&status=` | Questions and call-back requests for officers |
+| GET 🔒 | `/api/messages?phone=` | SMS sent and received (the simulator's inbox) |
+| GET 🔒 | `/api/questions?county=&status=` | Questions and call-back requests for officers |
+| PATCH 🔒 | `/api/pest-reports/:id` | `{status: verified\|rejected\|closed, confirmed_pest}`; verifying SMSes the farmer |
+| PATCH 🔒 | `/api/questions/:id` | `{answer, answered_by}`; the answer goes to the farmer by SMS (max 139 chars) |
+| GET 🔒 | `/api/hotspots?county=&days=7` | Pests reported 3+ times in one county |
+| POST 🔒 | `/api/broadcasts/preview` | `{counties, crops}` → how many farmers it would reach |
+| POST 🔒 | `/api/broadcasts` | `{counties, crops, channels, message}` → sends the SMS |
+| GET 🔒 | `/api/broadcasts` | Advisories already sent |
 
 ## Settings (environment variables)
 | Name | Default | Meaning |
@@ -103,6 +122,7 @@ prototype/            clickable demo screens (no server needed)
 | `DB_PATH` | `services/api/data/agriconnect.db` | Database file (delete it to start fresh) |
 | `CONTENT_DIR` | `content/` | Where the advisory content lives |
 | `SMS_PROVIDER` | `log` | `log` = record messages but don't send them (development) |
+| `OFFICER_TOKEN` | *(unset)* | Access code for 🔒 officer routes. Unset = open (fine on your laptop). **Always set it on a server others can reach**; the dashboard then asks for it. Real staff accounts come in MVP Sprint 1. |
 
 ## USSD menu (live)
 ```

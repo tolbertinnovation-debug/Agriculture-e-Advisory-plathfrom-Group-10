@@ -23,4 +23,5 @@ app.listen(PORT, () => {
   console.log(`AgriConnect API running on http://localhost:${PORT}`);
   console.log(`Database: ${DB_PATH}`);
   console.log(`Content: ${content.crops.size} crops, ${content.pests.length} pests`);
+  if (!process.env.OFFICER_TOKEN) console.warn("OFFICER_TOKEN is not set: officer pages are open. Fine on your laptop, never on a shared server.");
 });

@@ -6,6 +6,7 @@ import { openDb } from "../src/db.js";
 import { loadContent } from "../src/content.js";
 import { cleanFarmerInput, createFarmer, getFarmerByPhone } from "../src/farmers.js";
 import { createPestReport } from "../src/pestReports.js";
+import { createQuestion } from "../src/questions.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const db = openDb(process.env.DB_PATH ?? resolve(here, "../data/agriconnect.db"));
@@ -28,12 +29,21 @@ for (const f of farmers) {
   added++;
 }
 
+// Three fall armyworm reports in Nimba make a hotspot on the dashboard.
 const reports = [
   { phone: "0770000006", crop: "rice", symptoms: ["holes", "caterpillar"], channel: "ussd" },
+  { phone: "0880000101", county: "Nimba", crop: "maize", symptoms: ["holes", "caterpillar"], channel: "ussd" },
+  { phone: "0880000102", county: "Nimba", crop: "rice", symptoms: ["caterpillar", "holes"], channel: "ussd" },
   { phone: "0770000003", crop: "cassava", symptoms: ["yellow", "twisted"], channel: "ussd" },
   { phone: "0770000002", crop: "rice", symptoms: ["spots", "brown"], channel: "app" }
 ];
-// Only add the demo reports the first time, so running seed twice doesn't duplicate them.
-if (added) for (const r of reports) createPestReport(db, content, r);
 
-console.log(`Seeded ${added} new farmers${added ? ` and ${reports.length} pest reports` : " (demo data already present)"}.`);
+// Only add the demo reports and questions the first time, so running seed twice doesn't duplicate them.
+if (added) {
+  for (const r of reports) createPestReport(db, content, r);
+  createQuestion(db, { farmer: getFarmerByPhone(db, "0770000001"), kind: "text", channel: "sms", body: "My pepper leaves are curling and turning yellow. What can I do?" });
+  createQuestion(db, { farmer: getFarmerByPhone(db, "0770000002"), kind: "callback", channel: "ussd" });
+  createQuestion(db, { farmer: getFarmerByPhone(db, "0770000004"), kind: "text", channel: "sms", body: "When is the best time to harvest cassava for gari?" });
+}
+
+console.log(`Seeded ${added} new farmers${added ? `, ${reports.length} pest reports and 3 questions` : " (demo data already present)"}.`);

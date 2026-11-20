@@ -2,6 +2,7 @@
 import { ValidationError, getFarmerByPhone, getFarmer } from "./farmers.js";
 import { diagnose } from "./engine.js";
 import { findCounty, normalizePhone } from "./geo.js";
+import { sendSms } from "./messaging.js";
 
 const FALLBACK_SMS =
   "Thank you. We could not match these signs. An extension officer will call you. Ref: {ref}. Dial *347# for help";
@@ -72,4 +73,38 @@ export function listPestReports(db, { county, status, limit = 100 } = {}) {
   if (status) { where.push("status = ?"); args.push(status); }
   const sql = `SELECT * FROM pest_reports ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY id DESC LIMIT ?`;
   return db.prepare(sql).all(...args, limit).map(parse);
+}
+
+/**
+ * Officer action on a report: verify (optionally correcting the pest), reject or close.
+ * When a report is verified, the farmer gets a short SMS so they know a person checked it.
+ */
+export function updatePestReport(db, content, id, input) {
+  const report = getPestReport(db, id);
+  if (!report) return null;
+  const errors = [];
+  const status = input.status ?? report.status;
+  if (!STATUSES.includes(status)) errors.push(`status: must be one of ${STATUSES.join(", ")}`);
+  let confirmed = report.confirmed_pest;
+  if (input.confirmed_pest !== undefined) {
+    if (input.confirmed_pest === null || input.confirmed_pest === "") confirmed = null;
+    else if (!content.pests.some((p) => p.id === input.confirmed_pest)) errors.push(`confirmed_pest: unknown pest "${input.confirmed_pest}"`);
+    else confirmed = input.confirmed_pest;
+  }
+  if (errors.length) throw new ValidationError(errors);
+
+  db.prepare("UPDATE pest_reports SET status = ?, confirmed_pest = ? WHERE id = ?").run(status, confirmed, id);
+  const updated = getPestReport(db, id);
+
+  let notified = false;
+  if (status === "verified" && report.status !== "verified" && updated.phone) {
+    const pestId = confirmed ?? updated.suggested_pest;
+    const name = content.pests.find((p) => p.id === pestId)?.name;
+    const body = name
+      ? `AgriConnect: an extension officer confirmed ${name.toUpperCase()} (Ref PR-${id}). Follow the steps we sent. Dial *347# option 5 for a call-back.`
+      : `AgriConnect: an extension officer checked your report (Ref PR-${id}) and will call you. Dial *347# for help.`;
+    sendSms(db, { phone: updated.phone, farmerId: updated.farmer_id, body, force: true });
+    notified = true;
+  }
+  return { report: updated, notified };
 }
