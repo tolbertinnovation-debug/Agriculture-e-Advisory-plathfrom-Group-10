@@ -23,7 +23,9 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 1. [Frame the problem](docs/01-problem-framing.md)
 2. [Talk to real users: interview guide & notes](docs/02-user-interviews.md)
 3. [Team roles & tools](docs/03-team-and-tools.md)
-- [Full platform blueprint](docs/blueprint.md)
+- [Full platform blueprint (v2)](docs/blueprint.md): principles, user journeys, MVP scope, USSD design, architecture, API, data model, privacy, risks
+- [Plan to build the platform](docs/build-plan.md): 5 phases, hackathon schedule, 6 sprints, pilot, exit criteria
+- [Product backlog](docs/backlog.md): user stories with priority and acceptance criteria
 - [Screenshots](docs/screenshots/)
 
 ## Screens
