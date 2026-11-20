@@ -122,6 +122,41 @@ CREATE TABLE IF NOT EXISTS farmer_sessions (
   created_at  TEXT NOT NULL
 );
 
+-- Weather: the latest 5-day forecast per county (refreshed every few hours).
+CREATE TABLE IF NOT EXISTS weather_forecasts (
+  county      TEXT PRIMARY KEY,
+  days        TEXT NOT NULL,                       -- JSON: [{date, rain_prob, rain_mm, t_max, t_min, code}]
+  fetched_at  TEXT NOT NULL
+);
+-- Weather alerts sent per county, so farmers are not warned again and again.
+CREATE TABLE IF NOT EXISTS weather_alerts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  county      TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  reach       INTEGER NOT NULL DEFAULT 0,
+  sent_at     TEXT NOT NULL
+);
+
+-- Market prices, reported by trusted market reporters.
+CREATE TABLE IF NOT EXISTS market_reporters (
+  phone       TEXT PRIMARY KEY,
+  name        TEXT,
+  market      TEXT NOT NULL,                       -- market id from content/markets.json
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS prices (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  market      TEXT NOT NULL,
+  item        TEXT NOT NULL,
+  price_lrd   REAL NOT NULL,
+  reporter    TEXT,                                -- phone, or officer name
+  status      TEXT NOT NULL DEFAULT 'ok',          -- ok | flagged (unusual, waits for an officer) | rejected
+  reported_at TEXT NOT NULL                        -- ISO time from the engine's clock
+);
+
+CREATE INDEX IF NOT EXISTS idx_prices ON prices(market, item, reported_at);
+CREATE INDEX IF NOT EXISTS idx_weather_alerts ON weather_alerts(county, sent_at);
 CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_codes(phone, created_at);
 CREATE INDEX IF NOT EXISTS idx_farmers_county ON farmers(county);
 CREATE INDEX IF NOT EXISTS idx_reports_county_status ON pest_reports(county, status);

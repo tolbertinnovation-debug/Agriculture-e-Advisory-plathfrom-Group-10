@@ -31,10 +31,19 @@ const state = {
   pendingPhone: null,
   devCode: null,
   lastResult: null,                 // last Pest Doctor result
+  prices: store.get("prices", {}),  // market id -> last price list (offline copy)
+  market: store.get("market"),      // market chosen on the Prices screen
   error: null,
   busy: false
 };
-const save = () => { store.set("home", state.home); store.set("content", state.content); store.set("outbox", state.outbox); };
+const save = () => { store.set("home", state.home); store.set("content", state.content); store.set("outbox", state.outbox); store.set("prices", state.prices); store.set("market", state.market); };
+
+const WEATHER_ICON = { rain: "🌧️", dry: "☀️", ok: "⛅" };
+const dayName = (date) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(date + "T12:00:00Z").getUTCDay()];
+
+async function loadPrices(market) {
+  try { state.prices[market] = await api("GET", "/api/prices?market=" + encodeURIComponent(market)); save(); } catch {}
+}
 
 // ---------------------------------------------------------------- network
 async function api(method, path, body) {
@@ -64,8 +73,8 @@ const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()
 
 async function loadContent() {
   try {
-    const [crops, pests] = await Promise.all([api("GET", "/api/content/crops"), api("GET", "/api/content/pests")]);
-    state.content = { crops, ...pests };
+    const [crops, pests, markets] = await Promise.all([api("GET", "/api/content/crops"), api("GET", "/api/content/pests"), api("GET", "/api/markets")]);
+    state.content = { crops, ...pests, markets: markets.markets };
     save();
   } catch {}
 }
@@ -74,6 +83,7 @@ async function refreshHome() {
   if (!state.token) return;
   try {
     state.home = await api("GET", "/api/me/home");
+    if (state.home.prices) { state.prices[state.home.prices.market] = state.home.prices; if (!state.market) state.market = state.home.prices.market; }
     save();
   } catch (err) {
     if (err.status === 403) { state.home = null; state.screen = "register"; }
@@ -190,6 +200,10 @@ const screens = {
       : `<div class="card advice"><div class="stage-name">${esc(cropName(a.crop))}</div><p class="muted">Between seasons. We will send advice when your season starts.</p></div>`).join("");
     return `
       <div><div class="muted">${esc(f.district ? f.district + ", " : "")}${esc(f.county)} County</div><p class="hello">Hello${f.name ? ", " + esc(f.name) : ""} 👋</p></div>
+      ${h.weather ? `<button class="card weather-hero" data-go="weather" style="text-align:left;font:inherit">
+        <span class="big">${WEATHER_ICON[h.weather.advice.level]}</span>
+        <div style="flex:1"><div class="temp">${h.weather.days[0].t_max}°C <span style="font-size:14px;font-weight:700">rain ${h.weather.days[0].rain_prob}%</span></div>
+        <div style="font-size:13px">${esc(h.weather.advice.text)}</div></div><span style="font-size:13px;font-weight:700">5-day ›</span></button>` : ""}
       ${alerts}
       <div class="eyebrow">This week on your farm</div>
       ${advice}
@@ -198,8 +212,8 @@ const screens = {
         <button class="tile" data-go="pest"><span class="ic">🔍</span>Pest Doctor</button>
         <button class="tile" data-go="ask"><span class="ic">👩🏾‍🌾</span>Ask Expert</button>
         <button class="tile" data-go="reports"><span class="ic">📋</span>My Reports</button>
-        <button class="tile soon" data-action="soon"><span class="ic">🌦️</span>Weather</button>
-        <button class="tile soon" data-action="soon"><span class="ic">💰</span>Prices</button>
+        <button class="tile" data-go="weather"><span class="ic">🌦️</span>Weather</button>
+        <button class="tile" data-go="prices"><span class="ic">💰</span>Prices</button>
       </div>
       <p class="muted center" style="margin:0">Updated ${esc(h.date)}</p>`;
   },
@@ -239,6 +253,38 @@ const screens = {
           <p style="margin:6px 0 0;font-size:14.5px">${esc(r.pest.sms.en.replace(/ Officer told\.$/, ""))}</p>
           <p class="muted" style="margin:10px 0 0">${r.queued ? "📤 Saved. It goes to your extension officer as soon as you have network." : "✅ Sent to your extension officer."}</p>
         </div>` : `<div class="card">We could not match these signs. Your report ${r.queued ? "will go" : "went"} to an extension officer, who will call you.</div>` : ""}`;
+  },
+
+  weather() {
+    appbar(`Weather · ${state.home?.farmer.county ?? ""}`, true);
+    const w = state.home?.weather;
+    if (!w) return `<p class="muted">No forecast yet. Connect to the internet and try again.</p>`;
+    return `
+      <div class="card ${w.advice.level === "rain" ? "alert" : ""}" style="${w.advice.level === "rain" ? "" : "background:var(--leaf-soft);border-color:#C5DDBF"}">
+        <b>${WEATHER_ICON[w.advice.level]} Farm advice</b><p style="margin:4px 0 0;font-size:15px">${esc(w.advice.text)}</p></div>
+      <div class="card"><h3>Next ${w.days.length} days · chance of rain</h3>
+        ${w.days.map((d, i) => `<div class="day"><span class="d">${i === 0 ? "Today" : dayName(d.date)}</span><span class="muted" style="width:62px">${d.t_max}° / ${d.t_min}°</span>
+          <div class="rainbar"><i style="width:${d.rain_prob}%"></i></div><b style="width:44px;text-align:right">${d.rain_prob}%</b></div>`).join("")}
+      </div>
+      <p class="muted center" style="margin:0">${w.sample ? "Sample forecast (demo data)" : `Forecast: Open-Meteo · updated ${esc(when(w.fetched_at))}`}</p>`;
+  },
+
+  prices() {
+    appbar("Market Prices", true);
+    const markets = state.content?.markets ?? [];
+    const id = state.market ?? markets[0]?.id;
+    const list = state.prices[id];
+    const change = (c) => c == null ? `<span class="flat">new</span>` : c > 0 ? `<span class="up">▲ ${c}%</span>` : c < 0 ? `<span class="down">▼ ${-c}%</span>` : `<span class="flat">— 0%</span>`;
+    return `
+      <label class="field">Market<select data-action="market">${markets.map((m) => `<option value="${esc(m.id)}" ${m.id === id ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></label>
+      <div class="card">
+        <h3>Prices this week (LRD)</h3>
+        ${!list ? `<p class="muted">Connect to the internet to load prices for this market.</p>`
+          : !list.items.length ? `<p class="muted">No prices reported at ${esc(list.market_name)} this week yet.</p>`
+          : `<table><tr><th>Item</th><th style="text-align:right">Price</th><th style="text-align:right">vs last week</th></tr>
+            ${list.items.map((it) => `<tr><td>${esc(it.name)}<div class="muted">per ${esc(it.unit)}</div></td><td class="num">${Number(it.price_lrd).toLocaleString("en-US")}</td><td style="text-align:right">${change(it.change_pct)}</td></tr>`).join("")}</table>`}
+      </div>
+      <p class="muted center" style="margin:0">Reported by market reporters. SMS <b>PRICES GBARNGA</b> or dial *347# option 3 on any phone.</p>`;
   },
 
   reports() {
@@ -355,15 +401,20 @@ document.addEventListener("submit", (e) => {
 
 document.addEventListener("click", (e) => {
   const go = e.target.closest("[data-go]")?.dataset.go;
-  if (go) { state.screen = go; state.error = null; if (go !== "pest") state.lastResult = null; render(); if (go === "home" || go === "ask" || go === "reports") refreshHome().then(render); return; }
+  if (go) {
+    state.screen = go; state.error = null; if (go !== "pest") state.lastResult = null; render();
+    if (go === "home" || go === "ask" || go === "reports" || go === "weather") refreshHome().then(render);
+    if (go === "prices" && (state.market ?? state.content?.markets?.[0]?.id)) loadPrices(state.market ?? state.content.markets[0].id).then(render);
+    return;
+  }
   const action = e.target.closest("[data-action]")?.dataset.action;
-  if (action === "soon") alert("Weather and market prices are coming soon.");
   if (action === "change-phone") { state.pendingPhone = null; state.error = null; render(); }
   if (action === "signout") signOut();
 });
 
 document.addEventListener("change", async (e) => {
   const action = e.target.dataset.action;
+  if (action === "market") { state.market = e.target.value; save(); render(); await loadPrices(state.market); render(); return; }
   if (action !== "language" && action !== "sms") return;
   try {
     const r = await api("PATCH", "/api/me", action === "language" ? { language: e.target.value } : { sms: e.target.checked });

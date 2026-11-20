@@ -19,6 +19,8 @@ import { createPestReport } from "./pestReports.js";
 import { createQuestion } from "./questions.js";
 import { sendSms } from "./messaging.js";
 import { sendAdviceToFarmer } from "./scheduler.js";
+import { getForecast, shortForecast } from "./weather.js";
+import { latestPrices, priceText } from "./prices.js";
 
 export const USSD_MAX = 182;
 
@@ -178,7 +180,31 @@ function profile(ctx, s, farmer) {
   return end(smsOn ? "SMS advice stopped. Dial *347# and choose 6 to start again." : "SMS advice is ON again. Welcome back!");
 }
 
-const comingSoon = (what) => end(`${what} are coming soon. We will SMS you when they start.`);
+function weather(ctx, s, farmer) {
+  const f = getForecast(ctx.db, farmer.county, ctx.now());
+  if (!f) return end(`No forecast for ${farmer.county} yet. Please try again later.`);
+  const footer = "\n1 Get by SMS";
+  let screen = "";
+  for (const n of [3, 2, 1]) {
+    screen = `${shortForecast(f.days, n)}\n${f.advice.text}`;
+    if (screen.length + footer.length <= USSD_MAX) break;
+  }
+  s.ask((screen + footer).slice(0, USSD_MAX), (v) => (v === "1" ? true : undefined));
+  sendSms(ctx.db, { phone: farmer.phone, farmerId: farmer.id, body: `${farmer.county}: ${f.advice.text}`.slice(0, 160), force: true });
+  return end("Sent! Check your SMS.");
+}
+
+function prices(ctx, s, farmer) {
+  const markets = ctx.content.markets;
+  const mine = markets.findIndex((m) => m.county === farmer.county);
+  const ordered = mine > 0 ? [markets[mine], ...markets.filter((_, i) => i !== mine)] : markets;
+  const market = s.choose("Which market?", ordered.map((m) => ({ label: m.name, value: m.id })));
+  const list = latestPrices(ctx, market);
+  if (!list.items.length) return end(`${list.market_name}: no prices this week yet. Try another market.`);
+  s.ask(`${priceText(list, USSD_MAX - 13)}\n1 Get by SMS`, (v) => (v === "1" ? true : undefined));
+  sendSms(ctx.db, { phone: farmer.phone, farmerId: farmer.id, body: priceText(list, 160), force: true });
+  return end("Sent! Check your SMS.");
+}
 
 // ---------------------------------------------------------------- entry point
 
@@ -209,8 +235,8 @@ export function handleUssd(ctx, { phoneNumber, text }) {
     ]);
     switch (choice) {
       case "advice": return cropAdvice(ctx, s, farmer);
-      case "weather": return comingSoon("Weather alerts");
-      case "prices": return comingSoon("Market prices");
+      case "weather": return weather(ctx, s, farmer);
+      case "prices": return prices(ctx, s, farmer);
       case "pest": return reportPest(ctx, s, phone, farmer);
       case "ask": return askExpert(ctx, s, phone, farmer);
       default: return profile(ctx, s, farmer);

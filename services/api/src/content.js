@@ -13,17 +13,20 @@ export function loadContent(dir) {
     .sort((a, b) => (a.menu_order ?? 99) - (b.menu_order ?? 99) || a.id.localeCompare(b.id));
   const crops = new Map(list.map((c) => [c.id, c]));
   const pestFile = JSON.parse(readFileSync(join(dir, "pests.json"), "utf8"));
+  const marketFile = JSON.parse(readFileSync(join(dir, "markets.json"), "utf8"));
   return {
     crops,
     pests: pestFile.pests,
     symptoms: pestFile.symptoms,
     ussdSymptoms: pestFile.ussd_symptoms ?? [],
-    reportCrops: pestFile.report_crops ?? []
+    reportCrops: pestFile.report_crops ?? [],
+    markets: marketFile.markets,
+    items: marketFile.items
   };
 }
 
 /** Returns a list of human-readable problems. An empty list means the content is valid. */
-export function validateContent({ crops, pests, symptoms, ussdSymptoms = [], reportCrops = [] }) {
+export function validateContent({ crops, pests, symptoms, ussdSymptoms = [], reportCrops = [], markets = [], items = [] }) {
   const errors = [];
   const tooLong = (where, text) => {
     if (typeof text !== "string" || !text.trim()) errors.push(`${where}: SMS text is missing`);
@@ -65,5 +68,17 @@ export function validateContent({ crops, pests, symptoms, ussdSymptoms = [], rep
   }
   if (reportCrops.length < 1 || reportCrops.length > 6) errors.push("report_crops: need 1 to 6 options");
   for (const c of reportCrops) if (!c.id || !c.label) errors.push("report_crops: each option needs an id and a label");
+
+  // Markets and price items: SMS codes must be one word and unique.
+  if (markets.length < 1 || markets.length > 6) errors.push("markets: need 1 to 6 markets (USSD shows one screen)");
+  for (const [kind, list] of [["markets", markets], ["items", items]]) {
+    const codes = new Set();
+    for (const x of list) {
+      if (!x.id || !x.name || !x.code) errors.push(`${kind}: each entry needs id, code and name`);
+      else if (!/^[A-Z0-9]+$/.test(x.code)) errors.push(`${kind} "${x.id}": code must be one word in CAPITALS`);
+      else if (codes.has(x.code)) errors.push(`${kind}: code ${x.code} is used twice`);
+      codes.add(x.code);
+    }
+  }
   return errors;
 }

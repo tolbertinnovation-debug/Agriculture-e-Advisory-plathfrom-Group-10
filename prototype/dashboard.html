@@ -65,6 +65,8 @@
     <div class="logo">🌱 AgriConnect</div>
     <a href="#overview">📊 Overview</a>
     <a href="#hotspots">⚠ Hotspots</a>
+    <a href="#weather">🌦️ Weather</a>
+    <a href="#prices">💰 Market prices</a>
     <a href="#reports">🐛 Pest reports</a>
     <a href="#questions">💬 Farmer questions</a>
     <a href="#advisory">📣 Send advisory</a>
@@ -92,6 +94,19 @@
         <div class="card" id="jobs"><h3>🤖 Automatic advice &amp; SMS</h3><div id="jobInfo" class="muted">…</div>
           <div class="actions" style="margin-top:10px"><button class="act ghost" onclick="runAdvice(true)">Preview</button><button class="act" onclick="runAdvice(false)">Send due advice now</button></div>
         </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="card" id="weather"><h3>🌦️ Weather by county <button class="act ghost" onclick="refreshWeather()">Refresh now</button></h3><div class="scroll"><table id="weatherTable"></table></div><p class="muted" id="weatherNote" style="margin:8px 0 0"></p></div>
+      <div class="card" id="prices">
+        <h3>💰 Market prices <select id="pMarket" style="width:auto;font-size:13px;padding:6px"></select></h3>
+        <div class="scroll"><table id="priceTable"></table></div>
+        <div id="flagged"></div>
+        <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Market reporters (<span id="repCount">0</span>) · add one</summary>
+          <div class="answer"><input type="text" id="repPhone" placeholder="Phone"><input type="text" id="repName" placeholder="Name"><select id="repMarket" style="width:auto"></select><button class="act" onclick="addReporterForm()">Add</button></div>
+          <p class="muted" style="margin:6px 0 0">Reporters send: <b>PRICE GBARNGA RICE 45</b>. Unusual prices wait here for you to check.</p>
+        </details>
       </div>
     </div>
 
@@ -306,14 +321,71 @@ async function runAdvice(dryRun) {
   } catch (e) { toast(e.message, true); }
 }
 
+const LEVEL_LABEL = { rain: ["Heavy rain", "s-new"], dry: ["Hot & dry", "s-callback"], ok: ["OK", "s-answered"] };
+function renderWeather(list) {
+  const have = list.filter((w) => w.days.length);
+  $("#weatherTable").innerHTML = have.length
+    ? `<tr><th>County</th><th>Today</th><th>Rain next 3 days</th><th>Advice</th></tr>` +
+      have.sort((a, b) => (a.advice.level === "rain" ? 0 : 1) - (b.advice.level === "rain" ? 0 : 1) || a.county.localeCompare(b.county))
+        .map((w) => `<tr><td><b>${esc(w.county)}</b></td><td>${w.days[0].t_max}°C</td><td>${w.days.slice(0, 3).map((d) => d.rain_prob + "%").join(" · ")}</td><td><span class="status ${LEVEL_LABEL[w.advice.level][1]}">${LEVEL_LABEL[w.advice.level][0]}</span></td></tr>`).join("")
+    : '<tr><td class="empty">No forecasts yet. Click Refresh now (needs internet).</td></tr>';
+  const sample = have.some((w) => w.sample);
+  const fetched = have.map((w) => w.fetched_at).filter((t) => t !== "sample").sort().pop();
+  $("#weatherNote").textContent = sample ? "Sample forecast (demo data) until the server reaches Open-Meteo." : fetched ? `Open-Meteo, updated ${fetched.slice(0, 16).replace("T", " ")} UTC. Farmers in counties with heavy rain get an SMS alert (at most every 3 days).` : "";
+}
+
+let priceData = [], flaggedData = [], reporterData = [];
+function renderPrices(all = priceData, flagged = flaggedData, reporters = reporterData) {
+  priceData = all; flaggedData = flagged; reporterData = reporters;
+  const sel = $("#pMarket");
+  if (!sel.options.length) {
+    sel.innerHTML = all.map((m) => `<option value="${esc(m.market)}">${esc(m.market_name)}</option>`).join("");
+    $("#repMarket").innerHTML = sel.innerHTML;
+    sel.onchange = () => renderPrices(); // always the latest data, not the first one seen
+  }
+  const list = all.find((m) => m.market === sel.value) ?? all[0];
+  $("#priceTable").innerHTML = list?.items.length
+    ? `<tr><th>Item</th><th style="text-align:right">LRD</th><th style="text-align:right">Week</th><th>Reported</th></tr>` +
+      list.items.map((it) => `<tr><td>${esc(it.name)} <span class="muted">/${esc(it.unit)}</span></td><td class="num">${n(it.price_lrd)}</td><td class="num">${it.change_pct == null ? "–" : (it.change_pct > 0 ? "+" : "") + it.change_pct + "%"}</td><td>${ago(it.reported_at.replace("T", " ").slice(0, 19))} ago</td></tr>`).join("")
+    : '<tr><td class="empty">No prices this week for this market.</td></tr>';
+  $("#flagged").innerHTML = flagged?.length
+    ? `<p style="margin:10px 0 4px"><b>⚠ Unusual prices to check</b></p>` + flagged.map((p) => `<div class="answer" style="align-items:center"><span style="flex:1;font-size:13.5px">${esc(p.item_name)} at ${esc(p.market_name)}: <b>${n(p.price_lrd)} LRD</b> <span class="muted">(${esc(p.reporter ?? "")})</span></span><button class="act" onclick="setPrice(${p.id},'ok')">Accept</button><button class="act ghost" onclick="setPrice(${p.id},'rejected')">Reject</button></div>`).join("")
+    : "";
+  if (reporters) $("#repCount").textContent = reporters.length;
+}
+
+async function refreshWeather() {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  toast("Fetching forecasts for 15 counties…");
+  try {
+    const r = await api("POST", "/api/jobs/weather/run", {});
+    toast(r.failed.length ? `Updated ${r.updated} counties; ${r.failed.length} failed (no internet?).` : `Updated all ${r.updated} counties.` + (r.alerts.length ? ` Rain alerts sent in ${r.alerts.length} county(ies).` : ""), r.failed.length > 0);
+    refresh();
+  } catch (e) { toast(e.message, true); }
+}
+async function setPrice(id, status) {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  try { await api("PATCH", `/api/prices/${id}`, { status }); toast(status === "ok" ? "Price accepted: farmers can see it." : "Price rejected."); refresh(); } catch (e) { toast(e.message, true); }
+}
+async function addReporterForm() {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  try {
+    const r = await api("POST", "/api/reporters", { phone: $("#repPhone").value, name: $("#repName").value, market: $("#repMarket").value });
+    toast(`${r.phone} can now report prices for ${$("#repMarket").selectedOptions[0].text}.`);
+    $("#repPhone").value = ""; $("#repName").value = ""; refresh();
+  } catch (e) { toast(e.message, true); }
+}
+
 // ---------------- data loading ----------------
 async function refresh() {
   if (!live) return;
   try {
-    const [stats, hotspots, reports, questions, broadcasts, jobs] = await Promise.all([
+    const [stats, hotspots, reports, questions, broadcasts, jobs, weather, prices, flagged, reporters] = await Promise.all([
       api("GET", "/api/stats"), api("GET", "/api/hotspots"), api("GET", "/api/pest-reports?limit=25"),
-      api("GET", "/api/questions?limit=25"), api("GET", "/api/broadcasts"), api("GET", "/api/jobs")
+      api("GET", "/api/questions?limit=25"), api("GET", "/api/broadcasts"), api("GET", "/api/jobs"),
+      api("GET", "/api/weather"), api("GET", "/api/prices"), api("GET", "/api/prices/flagged"), api("GET", "/api/reporters")
     ]);
+    renderWeather(weather); renderPrices(prices, flagged, reporters);
     $("#login").style.display = "none";
     renderStats(stats); renderHotspots(hotspots); renderReports(reports); renderQuestions(questions); renderBroadcasts(broadcasts); renderJobs(jobs);
   } catch (e) { if (e.message !== "Officer login required") console.error(e); }
@@ -336,6 +408,8 @@ function demo() {
   ]);
   renderQuestions(DASH.questions.map((q, i) => ({ id: i, phone: q.farmer, county: q.county, channel: "sms", kind: "text", body: q.q, status: q.status === "Answered" ? "answered" : "open" })));
   renderBroadcasts([]);
+  renderWeather(COUNTIES.slice(0, 6).map((county, i) => ({ county, sample: true, days: WEATHER.map((w, d) => ({ t_max: w.hi, rain_prob: i % 3 ? Math.max(5, w.rain - 50) : w.rain })), advice: { level: i % 3 ? "ok" : "rain" } })));
+  renderPrices(MARKETS.map((name, mi) => ({ market: "m" + mi, market_name: name, items: PRICES.filter((p) => p.prices[mi]).map((p) => ({ name: p.item, unit: p.unit, price_lrd: p.prices[mi], change_pct: p.change, reported_at: new Date().toISOString() })) })), [], []);
   $("#jobInfo").innerHTML = "Crop-stage advice goes out <b>every day at 07:00</b>. SMS provider: sample data.";
 }
 

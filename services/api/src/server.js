@@ -32,13 +32,16 @@ const db = openDb(DB_PATH);
 const app = createApp({ db, content, adviceHour: ADVICE_HOUR, providerName: provider.name });
 startWorkers({ db, content, now: () => new Date() }, provider, {
   adviceHour: ADVICE_HOUR,
-  scheduler: process.env.SCHEDULER !== "off"
+  scheduler: process.env.SCHEDULER !== "off",
+  weather: process.env.WEATHER !== "off",
+  weatherUrl: process.env.WEATHER_URL
 });
 app.listen(PORT, () => {
   console.log(`AgriConnect API running on http://localhost:${PORT}`);
   console.log(`Database: ${DB_PATH}`);
   console.log(`Content: ${content.crops.size} crops, ${content.pests.length} pests`);
   console.log(`SMS provider: ${provider.name}${provider.name === "log" ? " (development: messages are recorded, not sent to phones)" : ""}`);
+  console.log(`Weather: ${process.env.WEATHER === "off" ? "OFF" : `Open-Meteo forecasts every 3 hours${process.env.WEATHER_URL ? ` (from ${process.env.WEATHER_URL})` : ""}`}`);
   console.log(`Daily crop advice: ${process.env.SCHEDULER === "off" ? "OFF" : `every day at ${String(ADVICE_HOUR).padStart(2, "0")}:00 Liberia time`}`);
   if (!process.env.WEBHOOK_SECRET && provider.name !== "log") console.warn("WEBHOOK_SECRET is not set: anyone could call /ussd and /sms/inbound. Set it before going live.");
   if (!process.env.OFFICER_TOKEN) console.warn("OFFICER_TOKEN is not set: officer pages are open. Fine on your laptop, never on a shared server.");

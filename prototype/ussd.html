@@ -168,7 +168,7 @@ function demoStep(val) {
 async function send(v) {
   const inp = $("inp");
   const val = (v ?? inp.value).trim(); inp.value = "";
-  if (sessionInputs === null) {
+  if (sessionInputs === null || val === "*347#") { // dialling again always starts a new session, like a real phone
     if (val !== "*347#") return show("Unknown code.\nDial *347#");
     sessionInputs = []; sessionId = "sim-" + Date.now(); stack = [];
     return live ? liveStep("") : demoStep(null);

@@ -9,6 +9,7 @@
 import { adviceForFarmer } from "./engine.js";
 import { sendSms, deliverQueued, requeueStuck } from "./messaging.js";
 import { getFarmer } from "./farmers.js";
+import { refreshWeather, sendWeatherAlerts } from "./weather.js";
 
 export const REMINDER_DAYS = 28;
 export const WEEKLY_CAP = 3;
@@ -90,7 +91,17 @@ export function adviceRunDue(db, now, hour) {
  *  - the daily advice job at `adviceHour`:00 (checked every minute)
  * Returns stop().
  */
-export function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs = 2000, scheduler = true, log = console } = {}) {
+/** Refresh all county forecasts, then send rain alerts (only in the daytime, 06:00-19:00 Liberia time). */
+export async function weatherCycle(ctx, { fetch, url, log = console } = {}) {
+  const r = await refreshWeather(ctx.db, { fetch, url, now: ctx.now() });
+  if (r.failed.length) log.warn(`Weather: ${r.updated} counties updated, ${r.failed.length} failed (${r.failed[0]})`);
+  const hour = ctx.now().getUTCHours();
+  const alerts = hour >= 6 && hour < 19 ? sendWeatherAlerts(ctx) : [];
+  for (const a of alerts) log.log(`Rain alert for ${a.county}: ${a.reach} farmers`);
+  return { ...r, alerts };
+}
+
+export function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs = 2000, scheduler = true, weather = true, weatherEveryHours = 3, weatherUrl, log = console } = {}) {
   const stuck = requeueStuck(ctx.db);
   if (stuck) log.log(`Re-queued ${stuck} message(s) that were being sent when the server stopped.`);
 
@@ -123,5 +134,11 @@ export function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs = 2000
     check();
     adviceTimer = setInterval(check, 60 * 1000);
   }
-  return () => { clearInterval(sendTimer); if (adviceTimer) clearInterval(adviceTimer); };
+  let weatherTimer = null;
+  if (weather) {
+    const run = () => weatherCycle(ctx, { url: weatherUrl, log }).catch((err) => log.error("Weather error:", err));
+    run();
+    weatherTimer = setInterval(run, weatherEveryHours * 3600 * 1000);
+  }
+  return () => { clearInterval(sendTimer); if (adviceTimer) clearInterval(adviceTimer); if (weatherTimer) clearInterval(weatherTimer); };
 }

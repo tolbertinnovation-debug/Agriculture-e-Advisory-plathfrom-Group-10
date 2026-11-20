@@ -13,11 +13,11 @@ npm install
 ```bash
 npm test
 ```
-You should see `# pass 82` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
+You should see `# pass 99` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
 
 ## 3. Add demo data and start the API
 ```bash
-npm run seed     # 6 demo farmers, 5 pest reports (a Nimba hotspot) and 3 questions
+npm run seed     # demo farmers, pest reports (a Nimba hotspot), questions, market reporters, 2 weeks of sample prices, a sample forecast
 npm run dev      # starts on http://localhost:3000 and restarts when you save a file
 ```
 
@@ -28,7 +28,7 @@ With the API running, open **http://localhost:3000/prototype/ussd.html**. The ba
 2. Choose **1 Register**, then a language, county, crop, planting month and **1 I agree**.
 3. The SMS panel shows the welcome message (and this week's advice if your crop is in season).
 4. Dial `*347#` again: you now see the full menu. Try **4 Report pest**, **5 Ask an expert**, **6 My profile**.
-5. Send an SMS from the panel: `HELP`, `ASK my pepper leaves are yellow`, `STOP`, `START`.
+5. Send an SMS from the panel: `HELP`, `ASK my pepper leaves are yellow`, `WEATHER`, `PRICES GBARNGA`, `STOP`, `START`. To try reporting a price, set the phone to a seeded reporter (`0886000002` = Gbarnga) and send `PRICE GBARNGA RICE 47`.
 
 The simulator talks to the API exactly like a telco gateway: `POST /ussd` with `phoneNumber` and `text` (all answers joined by `*`), and the API answers `CON …` (wait for the next answer) or `END …` (close). When we get a real short code, the gateway points to the same URL.
 
@@ -89,7 +89,23 @@ How it works:
 
 Install on a phone: when the API runs on a server with HTTPS, open `/app/` in Chrome on Android and choose **Add to Home screen**.
 
-## 8. Try the API directly
+## 8. Weather and market prices (step 6)
+**Weather.** Every 3 hours the server fetches a 5-day forecast for each county capital from **Open-Meteo**, which is free and needs no key. It turns the forecast into farm advice:
+- **Heavy rain** (chance ≥ 70% or ≥ 20 mm in the next 2 days): "Don't spray or apply fertilizer… wait until Sun. Clear drainage." Farmers in that county get an SMS alert between 06:00 and 19:00, at most once every 3 days.
+- **Hot and dry**: water seedlings early or late; mulch.
+- **Otherwise**: the good days to spray or apply fertilizer.
+
+Farmers see it on `*347#` option 2, by SMS `WEATHER`, and in the app (home card + Weather screen). Officers see every county on the dashboard and can click **Refresh now**. If the server cannot reach Open-Meteo, the last forecast is kept. `npm run seed` adds a **sample** forecast, clearly labelled, so the demo works without internet.
+
+The rain and temperature limits are drafts in `src/weather.js` (`HEAVY_RAIN_PROB`, `HEAVY_RAIN_MM`, `GOOD_DAY_PROB`). Agree them with MOA / CARI.
+
+**Market prices.**
+1. An officer adds trusted market reporters (dashboard → Market prices → *Market reporters · add one*).
+2. A reporter sends one SMS per price: `PRICE GBARNGA RICE 45`. Market and item codes are in `content/markets.json`.
+3. A price more than 50% away from the recent prices for that item at that market is **flagged**. Farmers don't see it until an officer clicks **Accept** (so a typo like 450 for 45 never misleads anyone).
+4. Farmers see the latest prices and the change from last week: `*347#` option 3 (their county's market first), SMS `PRICES GBARNGA`, or the app's Prices screen (works offline with the last prices).
+
+## 9. Try the API directly
 Open these in your browser:
 - http://localhost:3000/health
 - http://localhost:3000/api/stats: farmers by county
@@ -114,7 +130,7 @@ curl -X POST http://localhost:3000/api/farmers \
 
 ## Project layout
 ```
-content/              crop calendars & pest table (JSON). Agronomists edit these; every SMS must be ≤160 characters
+content/              crop calendars, pest table, markets & price items (JSON). Agronomists edit these; every SMS must be ≤160 characters
 services/api/
   src/server.js       starts the API
   src/app.js          all HTTP routes
@@ -131,6 +147,8 @@ services/api/
   src/providers/      SMS providers: log (development), africastalking, http
   src/auth.js         farmer sign-in: SMS codes and sessions
   src/farmerApi.js    farmer app API: /api/auth/*, /api/me/*
+  src/weather.js      Open-Meteo forecasts per county, farm advice from the forecast, rain alerts
+  src/prices.js       market prices: SMS reports, unusual-price check, latest prices with weekly change
 apps/farmer/          the real farmer app (offline PWA): index.html, app.js, sw.js, styles.css
   src/db.js           database tables
   src/content.js      loads and checks /content
@@ -139,7 +157,7 @@ apps/farmer/          the real farmer app (offline PWA): index.html, app.js, sw.
 prototype/            clickable demo screens for the pitch (no server needed)
 ```
 
-## API (steps 1–5)
+## API (steps 1–6)
 
 Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 
@@ -170,6 +188,14 @@ Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 | GET 🔒 | `/api/jobs` | Daily advice schedule, last runs, SMS queue counts |
 | POST 🔒 | `/api/jobs/advice/run` | `{dry_run: true}` to preview, `{}` to send due advice now |
 | POST | `/sms/status` | Delivery reports from the SMS provider: `{id, status}` |
+| GET | `/api/weather?county=Bong` | Forecast + farm advice for a county (all counties without `county`) |
+| GET | `/api/markets` | Markets and price items |
+| GET | `/api/prices?market=GBARNGA` | Latest prices with weekly change (all markets without `market`) |
+| POST 🔒 | `/api/prices` | `{market, item, price}`: officer enters a price |
+| GET 🔒 | `/api/prices/flagged` | Unusual prices waiting for a check |
+| PATCH 🔒 | `/api/prices/:id` | `{status: ok \| rejected}` |
+| GET / POST 🔒 | `/api/reporters` | List / add market reporters `{phone, name, market}` |
+| POST 🔒 | `/api/jobs/weather/run` | Fetch all county forecasts now (and send due rain alerts) |
 | POST | `/api/auth/request-code` | `{phone}` → SMS with a 6-digit code (`dev_code` in the answer only when `SMS_PROVIDER=log`) |
 | POST | `/api/auth/verify` | `{phone, code}` → `{token, registered}` |
 | POST 👤 | `/api/auth/logout` | End this session |
@@ -191,6 +217,8 @@ Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 | `SMS_PROVIDER` | `log` | `log`, `africastalking` or `http`; see section 6 |
 | `ADVICE_HOUR` | `7` | Hour (Liberia time = UTC) for the daily crop advice |
 | `SCHEDULER` | *(on)* | `off` = don't run the daily advice job |
+| `WEATHER` | *(on)* | `off` = don't fetch forecasts |
+| `WEATHER_URL` | Open-Meteo | Another server with the same format (used for testing) |
 | `WEBHOOK_SECRET` | *(unset)* | When set, `/ussd`, `/sms/inbound` and `/sms/status` need `?secret=…` or header `X-Webhook-Secret` |
 | `OFFICER_TOKEN` | *(unset)* | Access code for 🔒 officer routes. Unset = open (fine on your laptop). **Always set it on a server others can reach**; the dashboard then asks for it. Real staff accounts come in MVP Sprint 1. |
 
@@ -198,8 +226,8 @@ Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 ```
 *347#  (new number)                  *347#  (registered farmer)
 1 Register (free)                    1 Crop advice  → this week's tip → 1 Get by SMS
-  language → county (2 pages)        2 Weather          (coming in step 6)
-  → crop → planting month            3 Market prices    (coming in step 6)
+  language → county (2 pages)        2 Weather → 3-day forecast + advice → 1 Get by SMS
+  → crop → planting month            3 Market prices → market → prices → 1 Get by SMS
   → consent → welcome SMS            4 Report pest → what you see → crop → SMS reply + Ref
 2 Report pest (asks county)          5 Ask an expert → call-back request / how to ASK by SMS
 3 Ask an expert (asks county)        6 My profile → change language / stop or start SMS

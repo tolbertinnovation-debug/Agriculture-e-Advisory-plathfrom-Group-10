@@ -9,6 +9,8 @@ import { createQuestion, getQuestion } from "./questions.js";
 import { listHotspots } from "./hotspots.js";
 import { sendSms } from "./messaging.js";
 import { sendAdviceToFarmer } from "./scheduler.js";
+import { getForecast } from "./weather.js";
+import { latestPrices } from "./prices.js";
 
 const CLIENT_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
@@ -90,6 +92,9 @@ export function farmerRoutes(app, ctx, { exposeDevCode = false } = {}) {
       date: ctx.now().toISOString().slice(0, 10),
       advice: adviceForFarmer(f, content, ctx.now()),
       alerts: alertsFor(ctx, f),
+      weather: getForecast(db, f.county, ctx.now()),
+      // Prices at the market in the farmer's county (or Red Light, Monrovia, if none).
+      prices: latestPrices(ctx, (content.markets.find((m) => m.county === f.county) ?? content.markets[0]).id),
       reports,
       questions
     });

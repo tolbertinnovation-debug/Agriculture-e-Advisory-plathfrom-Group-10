@@ -19,17 +19,17 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 
 > All prices, counts and forecasts in the prototype are **sample data**.
 
-## Run the platform (steps 1–5 of the build)
+## Run the platform (all 6 build steps done)
 ```bash
 cd services/api
 npm install
-npm test        # 82 tests
+npm test        # 99 tests
 npm run seed    # demo farmers
 npm run dev
 ```
 | Open | What |
 |---|---|
-| http://localhost:3000/app/ | **Farmer app**: sign in with an SMS code, works offline |
+| http://localhost:3000/app/ | **Farmer app**: sign in with an SMS code, advice, weather, prices, Pest Doctor; works offline |
 | http://localhost:3000/prototype/ussd.html | Basic phone `*347#` simulator with SMS inbox |
 | http://localhost:3000/prototype/dashboard.html | Extension officer dashboard |
 

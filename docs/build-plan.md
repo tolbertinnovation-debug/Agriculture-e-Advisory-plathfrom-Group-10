@@ -142,7 +142,9 @@ SMS and USSD traffic · voice minutes · hosting · phones for testing · transl
 | 3 | Officer dashboard connected: live reports with verify/reject, automatic hotspots, answer questions by SMS, broadcast by county and crop | ✅ Done |
 | 4 | Daily crop advice job (new stage, 28-day reminders, 3/week cap), SMS queue with retries and delivery reports, Africa's Talking and generic HTTP providers, webhook secret | ✅ Done |
 | 5 | Farmer app (`apps/farmer`): SMS-code sign-in, registration, advice, county alerts, Pest Doctor and questions that work offline and sync without duplicates | ✅ Done |
-| 6 | Weather and market prices (Ask an Expert is done in steps 2–5) | Next |
+| 6 | Weather (Open-Meteo per county, farm advice, rain alerts) and market prices (SMS reporting, unusual-price check, weekly change) on USSD, SMS, app and dashboard | ✅ Done |
+
+**All six build steps are done: the hackathon MVP is complete.** Next (MVP Sprint 1 in Phase 2): move to PostgreSQL, real staff accounts with roles and 2FA instead of `OFFICER_TOKEN`, deploy to a server with HTTPS and daily backups, and test with real phones on Lonestar Cell MTN and Orange.
 
 ## Next 7 days
 1. Turn every **Must** story in [backlog.md](backlog.md) into a GitHub issue with an owner.

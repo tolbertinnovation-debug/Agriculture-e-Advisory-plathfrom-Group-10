@@ -1,0 +1,21 @@
+{
+  "note": "Markets and items for price reporting. Reporters send: PRICE <market> <item> <price in LRD>, e.g. PRICE GBARNGA RICE 45. Codes are what people type by SMS (not case-sensitive). At most 6 markets show in the USSD menu.",
+  "markets": [
+    { "id": "redlight", "code": "REDLIGHT", "name": "Red Light (Monrovia)", "county": "Montserrado" },
+    { "id": "gbarnga", "code": "GBARNGA", "name": "Gbarnga", "county": "Bong" },
+    { "id": "ganta", "code": "GANTA", "name": "Ganta", "county": "Nimba" },
+    { "id": "voinjama", "code": "VOINJAMA", "name": "Voinjama", "county": "Lofa" },
+    { "id": "buchanan", "code": "BUCHANAN", "name": "Buchanan", "county": "Grand Bassa" },
+    { "id": "kakata", "code": "KAKATA", "name": "Kakata", "county": "Margibi" }
+  ],
+  "items": [
+    { "id": "rice-local", "code": "RICE", "name": "Local rice", "unit": "cup" },
+    { "id": "rice-imported", "code": "IMPRICE", "name": "Imported rice", "unit": "25 kg bag" },
+    { "id": "cassava", "code": "CASSAVA", "name": "Cassava (fresh)", "unit": "rubber bucket" },
+    { "id": "gari", "code": "GARI", "name": "Gari / fufu", "unit": "cup" },
+    { "id": "pepper", "code": "PEPPER", "name": "Hot pepper", "unit": "pile" },
+    { "id": "palm-oil", "code": "PALMOIL", "name": "Palm oil", "unit": "gallon" },
+    { "id": "cocoa", "code": "COCOA", "name": "Cocoa (dried)", "unit": "kg" },
+    { "id": "plantain", "code": "PLANTAIN", "name": "Plantain", "unit": "bunch" }
+  ]
+}

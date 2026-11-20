@@ -16,6 +16,9 @@ import { normalizePhone } from "./geo.js";
 import { handleUssd } from "./ussd.js";
 import { handleInboundSms } from "./smsInbound.js";
 import { farmerRoutes } from "./farmerApi.js";
+import { getForecast, COUNTY_POINTS } from "./weather.js";
+import { weatherCycle } from "./scheduler.js";
+import { recordPrice, latestPrices, allLatestPrices, listFlaggedPrices, setPriceStatus, addReporter, listReporters } from "./prices.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROTOTYPE_DIR = resolve(HERE, "../../../prototype");
@@ -62,7 +65,9 @@ export function createApp({
   officerToken = process.env.OFFICER_TOKEN,
   webhookSecret = process.env.WEBHOOK_SECRET,
   adviceHour = Number(process.env.ADVICE_HOUR ?? 7),
-  providerName = process.env.SMS_PROVIDER ?? "log"
+  providerName = process.env.SMS_PROVIDER ?? "log",
+  weatherFetch = globalThis.fetch,
+  weatherUrl = process.env.WEATHER_URL
 }) {
   const ctx = { db, content, now };
   const officer = officerGuard(officerToken);
@@ -97,6 +102,25 @@ export function createApp({
     res.json([...content.crops.values()].map(({ id, name, status, stages }) => ({ id, name, status, stages })))
   );
   app.get("/api/content/pests", (req, res) => res.json({ symptoms: content.symptoms, pests: content.pests, report_crops: content.reportCrops }));
+
+  // ---- Weather (public: forecasts are not personal data) ----
+  app.get("/api/weather", (req, res) => {
+    if (req.query.county) {
+      const county = findCounty(req.query.county);
+      if (!county) return res.status(400).json({ error: "Unknown county" });
+      return res.json(getForecast(db, county, now()) ?? { county, days: [], advice: null });
+    }
+    res.json(Object.keys(COUNTY_POINTS).map((c) => getForecast(db, c, now()) ?? { county: c, days: [], advice: null }));
+  });
+
+  // ---- Market prices (public read) ----
+  app.get("/api/markets", (req, res) => res.json({ markets: content.markets, items: content.items }));
+  app.get("/api/prices", (req, res) => {
+    if (!req.query.market) return res.json(allLatestPrices(ctx));
+    const list = latestPrices(ctx, req.query.market);
+    if (!list) return res.status(404).json({ error: "Unknown market" });
+    res.json(list);
+  });
 
   // ---- Farmers ----
   // Assisted registration by an officer. Farmers register themselves through USSD or the app (/api/me/register).
@@ -164,6 +188,23 @@ export function createApp({
   app.post("/sms/status", gateway, (req, res) => {
     const { id, messageId, status } = req.body ?? {};
     res.json({ ok: true, updated: markDelivery(db, id ?? messageId, status) });
+  });
+
+  // ---- Prices: officer tools ----
+  app.post("/api/prices", officer, (req, res) => res.status(201).json(recordPrice(ctx, { ...req.body, reporter: req.body?.reporter ?? "officer" })));
+  app.get("/api/prices/flagged", officer, (req, res) => res.json(listFlaggedPrices(ctx)));
+  app.patch("/api/prices/:id", officer, (req, res) => {
+    if (!setPriceStatus(db, Number(req.params.id), req.body?.status)) return res.status(404).json({ error: "Price not found" });
+    res.json({ ok: true });
+  });
+  app.get("/api/reporters", officer, (req, res) => res.json(listReporters(db)));
+  app.post("/api/reporters", officer, (req, res) => res.status(201).json(addReporter(ctx, req.body ?? {})));
+
+  // ---- Weather: officer refresh (also runs every 3 hours by itself) ----
+  app.post("/api/jobs/weather/run", officer, async (req, res, next) => {
+    try {
+      res.json(await weatherCycle(ctx, { fetch: weatherFetch, url: weatherUrl, log: { log() {}, warn() {}, error() {} } }));
+    } catch (err) { next(err); }
   });
 
   // ---- Jobs: the daily advice job ----
