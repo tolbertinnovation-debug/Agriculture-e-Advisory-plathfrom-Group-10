@@ -1,21 +1,20 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { openDb } from "../src/db.js";
 import { cleanFarmerInput, createFarmer, getFarmer, setOptedOut } from "../src/farmers.js";
 import { sendSms, deliverQueued, markDelivery, requeueStuck, listMessages, messageStats, MAX_ATTEMPTS } from "../src/messaging.js";
 import { sendAdviceToFarmer, runAdviceJob, adviceRunDue, nextAdviceRun, WEEKLY_CAP } from "../src/scheduler.js";
 import { africasTalkingProvider, httpProvider, providerFromEnv } from "../src/providers/index.js";
-import { content, startTestServer } from "./helpers.js";
+import { content, startTestServer, newDb } from "./helpers.js";
 
 let clock;
 let ctx;
 const day = 24 * 60 * 60 * 1000;
-beforeEach(() => {
+beforeEach(async () => {
   clock = new Date("2026-06-05T08:00:00Z"); // rice planted in May is in "first weeding"
-  ctx = { db: openDb(":memory:"), content, now: () => clock };
+  ctx = { db: await newDb(), content, now: () => clock };
 });
-const addFarmer = (phone, crops = [{ crop: "rice", planting_month: 5 }]) =>
-  createFarmer(ctx.db, cleanFarmerInput({ phone, county: "Bong", consent: true, crops }, content));
+const addFarmer = async (phone, crops = [{ crop: "rice", planting_month: 5 }]) =>
+  (await createFarmer(ctx.db, cleanFarmerInput({ phone, county: "Bong", consent: true, crops }, content)));
 const fakeProvider = (answers) => {
   const calls = [];
   return { name: "fake", calls, async send(m) { calls.push(m); const a = answers.shift() ?? { ok: true, id: `id-${calls.length}` }; if (a instanceof Error) throw a; return a; } };
@@ -23,19 +22,19 @@ const fakeProvider = (answers) => {
 
 // ---------------- queue & sender ----------------
 test("messages are queued, then sent by the background sender", async () => {
-  sendSms(ctx.db, { phone: "+231777000001", body: "Hello" });
-  assert.equal(listMessages(ctx.db)[0].status, "queued");
+  (await sendSms(ctx.db, { phone: "+231777000001", body: "Hello" }));
+  assert.equal((await listMessages(ctx.db))[0].status, "queued");
   const provider = fakeProvider([]);
   const r = await deliverQueued(ctx.db, provider, { now: clock });
   assert.deepEqual(r, { sent: 1, retrying: 0, failed: 0 });
-  const [m] = listMessages(ctx.db);
+  const [m] = (await listMessages(ctx.db));
   assert.equal(m.status, "sent");
   assert.equal(m.provider_id, "id-1");
   assert.deepEqual(provider.calls, [{ to: "+231777000001", body: "Hello" }]);
 });
 
 test("a temporary failure is retried later, then gives up after the last attempt", async () => {
-  sendSms(ctx.db, { phone: "+231777000001", body: "Hello" });
+  (await sendSms(ctx.db, { phone: "+231777000001", body: "Hello" }));
   const provider = fakeProvider([{ ok: false, error: "gateway down", retry: true }, new Error("timeout"), { ok: false, error: "still down", retry: true }]);
   assert.equal((await deliverQueued(ctx.db, provider, { now: clock })).retrying, 1);
   assert.equal((await deliverQueued(ctx.db, provider, { now: clock })).retrying, 0, "not due yet: waits before retrying");
@@ -43,90 +42,90 @@ test("a temporary failure is retried later, then gives up after the last attempt
   assert.equal((await deliverQueued(ctx.db, provider, { now: clock })).retrying, 1);
   clock = new Date(clock.getTime() + 5 * 60 * 1000);
   assert.equal((await deliverQueued(ctx.db, provider, { now: clock })).failed, 1);
-  const [m] = listMessages(ctx.db);
+  const [m] = (await listMessages(ctx.db));
   assert.equal(m.status, "failed");
   assert.equal(m.attempts, MAX_ATTEMPTS);
   assert.equal(m.last_error, "still down");
 });
 
 test("a permanent failure (e.g. invalid number) is not retried", async () => {
-  sendSms(ctx.db, { phone: "+231777000001", body: "Hello" });
+  (await sendSms(ctx.db, { phone: "+231777000001", body: "Hello" }));
   const r = await deliverQueued(ctx.db, fakeProvider([{ ok: false, error: "403 InvalidPhoneNumber", retry: false }]), { now: clock });
   assert.equal(r.failed, 1);
 });
 
 test("delivery reports update the status; messages stuck in 'sending' are re-queued", async () => {
-  sendSms(ctx.db, { phone: "+231777000001", body: "One" });
-  sendSms(ctx.db, { phone: "+231777000002", body: "Two" });
+  (await sendSms(ctx.db, { phone: "+231777000001", body: "One" }));
+  (await sendSms(ctx.db, { phone: "+231777000002", body: "Two" }));
   await deliverQueued(ctx.db, fakeProvider([{ ok: true, id: "AT-1" }, { ok: true, id: "AT-2" }]), { now: clock });
-  assert.equal(markDelivery(ctx.db, "AT-1", "Success"), true);
-  assert.equal(markDelivery(ctx.db, "AT-2", "Failed"), true);
-  assert.equal(markDelivery(ctx.db, "AT-3", "Success"), false);
-  assert.deepEqual(messageStats(ctx.db), { queued: 0, sent: 1, delivered: 1, failed: 1 });
-  ctx.db.prepare("UPDATE message_log SET status = 'sending' WHERE body = 'One'").run();
-  assert.equal(requeueStuck(ctx.db), 1);
+  assert.equal((await markDelivery(ctx.db, "AT-1", "Success")), true);
+  assert.equal((await markDelivery(ctx.db, "AT-2", "Failed")), true);
+  assert.equal((await markDelivery(ctx.db, "AT-3", "Success")), false);
+  assert.deepEqual((await messageStats(ctx.db)), { queued: 0, sent: 1, delivered: 1, failed: 1 });
+  await ctx.db.run("UPDATE message_log SET status = 'sending' WHERE body = 'One'");
+  assert.equal((await requeueStuck(ctx.db)), 1);
 });
 
 // ---------------- daily advice rules ----------------
-test("advice is sent once per stage, with a reminder only after 28 days", () => {
-  const f = addFarmer("0777000001");
-  assert.deepEqual(sendAdviceToFarmer(ctx, f).map((r) => r.action), ["sent"]);
-  assert.deepEqual(sendAdviceToFarmer(ctx, f).map((r) => r.action), ["recent"]);
+test("advice is sent once per stage, with a reminder only after 28 days", async () => {
+  const f = (await addFarmer("0777000001"));
+  assert.deepEqual((await sendAdviceToFarmer(ctx, f)).map((r) => r.action), ["sent"]);
+  assert.deepEqual((await sendAdviceToFarmer(ctx, f)).map((r) => r.action), ["recent"]);
   clock = new Date(clock.getTime() + 7 * day); // week 4: still first weeding
-  assert.deepEqual(sendAdviceToFarmer(ctx, f).map((r) => r.action), ["recent"]);
+  assert.deepEqual((await sendAdviceToFarmer(ctx, f)).map((r) => r.action), ["recent"]);
   clock = new Date(clock.getTime() + 7 * day); // week 5: second weeding = new stage
-  assert.deepEqual(sendAdviceToFarmer(ctx, f).map((r) => r.stage + ":" + r.action), ["second-weeding:sent"]);
-  const advice = listMessages(ctx.db).filter((m) => m.kind === "advice");
+  assert.deepEqual((await sendAdviceToFarmer(ctx, f)).map((r) => r.stage + ":" + r.action), ["second-weeding:sent"]);
+  const advice = (await listMessages(ctx.db)).filter((m) => m.kind === "advice");
   assert.equal(advice.length, 2);
 });
 
-test("long stages get a reminder after 28 days", () => {
-  const f = addFarmer("0777000001", [{ crop: "cassava", planting_month: 1 }]); // mid-growth stage (weeks 13-35)
-  assert.equal(sendAdviceToFarmer(ctx, f)[0].action, "sent");
+test("long stages get a reminder after 28 days", async () => {
+  const f = (await addFarmer("0777000001", [{ crop: "cassava", planting_month: 1 }])); // mid-growth stage (weeks 13-35)
+  assert.equal((await sendAdviceToFarmer(ctx, f))[0].action, "sent");
   clock = new Date(clock.getTime() + 27 * day);
-  assert.equal(sendAdviceToFarmer(ctx, f)[0].action, "recent");
+  assert.equal((await sendAdviceToFarmer(ctx, f))[0].action, "recent");
   clock = new Date(clock.getTime() + 2 * day);
-  assert.equal(sendAdviceToFarmer(ctx, f)[0].action, "sent");
+  assert.equal((await sendAdviceToFarmer(ctx, f))[0].action, "sent");
 });
 
-test("no advice to farmers who said STOP, or between seasons", () => {
-  const stopped = addFarmer("0777000001");
-  setOptedOut(ctx.db, stopped.id, true);
-  assert.equal(sendAdviceToFarmer(ctx, getFarmer(ctx.db, stopped.id))[0].action, "opted_out");
-  const offSeason = addFarmer("0777000002", [{ crop: "rice", planting_month: 9 }]); // planted last Sept: long harvested
-  assert.equal(sendAdviceToFarmer(ctx, offSeason)[0].action, "no_advice");
-  assert.equal(listMessages(ctx.db).length, 0);
+test("no advice to farmers who said STOP, or between seasons", async () => {
+  const stopped = (await addFarmer("0777000001"));
+  (await setOptedOut(ctx.db, stopped.id, true));
+  assert.equal((await sendAdviceToFarmer(ctx, (await getFarmer(ctx.db, stopped.id))))[0].action, "opted_out");
+  const offSeason = (await addFarmer("0777000002", [{ crop: "rice", planting_month: 9 }])); // planted last Sept: long harvested
+  assert.equal((await sendAdviceToFarmer(ctx, offSeason))[0].action, "no_advice");
+  assert.equal((await listMessages(ctx.db)).length, 0);
 });
 
-test(`at most ${WEEKLY_CAP} advice messages per farmer per week`, () => {
+test(`at most ${WEEKLY_CAP} advice messages per farmer per week`, async () => {
   const fake = { ...content, crops: new Map([...content.crops].concat(["a", "b"].map((id) => [id, { ...content.crops.get("rice"), id }]))) };
   const c = { ...ctx, content: fake };
-  const f = createFarmer(ctx.db, cleanFarmerInput({ phone: "0777000001", county: "Bong", consent: true,
-    crops: ["rice", "cassava", "a", "b"].map((crop) => ({ crop, planting_month: 5 })) }, fake));
-  const actions = sendAdviceToFarmer(c, f).map((r) => r.action);
+  const f = (await createFarmer(ctx.db, cleanFarmerInput({ phone: "0777000001", county: "Bong", consent: true,
+    crops: ["rice", "cassava", "a", "b"].map((crop) => ({ crop, planting_month: 5 })) }, fake)));
+  const actions = (await sendAdviceToFarmer(c, f)).map((r) => r.action);
   assert.equal(actions.filter((a) => a === "sent").length, WEEKLY_CAP);
   assert.ok(actions.includes("cap"));
 });
 
-test("the advice job covers every farmer, records the run, and a dry run sends nothing", () => {
-  addFarmer("0777000001");
-  addFarmer("0777000002", [{ crop: "cassava", planting_month: 4 }]);
-  const dry = runAdviceJob(ctx, { dryRun: true });
+test("the advice job covers every farmer, records the run, and a dry run sends nothing", async () => {
+  (await addFarmer("0777000001"));
+  (await addFarmer("0777000002", [{ crop: "cassava", planting_month: 4 }]));
+  const dry = (await runAdviceJob(ctx, { dryRun: true }));
   assert.equal(dry.sent, 2);
-  assert.equal(listMessages(ctx.db).length, 0);
-  const real = runAdviceJob(ctx, { trigger: "schedule" });
+  assert.equal((await listMessages(ctx.db)).length, 0);
+  const real = (await runAdviceJob(ctx, { trigger: "schedule" }));
   assert.equal(real.sent, 2);
-  assert.equal(runAdviceJob(ctx).recent, 2);
+  assert.equal((await runAdviceJob(ctx)).recent, 2);
 });
 
-test("the daily schedule runs once a day after the set hour", () => {
+test("the daily schedule runs once a day after the set hour", async () => {
   const at = (iso) => new Date(iso);
-  assert.equal(adviceRunDue(ctx.db, at("2026-06-05T06:59:00Z"), 7), false);
-  assert.equal(adviceRunDue(ctx.db, at("2026-06-05T07:00:00Z"), 7), true);
+  assert.equal((await adviceRunDue(ctx.db, at("2026-06-05T06:59:00Z"), 7)), false);
+  assert.equal((await adviceRunDue(ctx.db, at("2026-06-05T07:00:00Z"), 7)), true);
   clock = at("2026-06-05T07:00:00Z");
-  runAdviceJob(ctx, { trigger: "schedule" });
-  assert.equal(adviceRunDue(ctx.db, at("2026-06-05T18:00:00Z"), 7), false);
-  assert.equal(adviceRunDue(ctx.db, at("2026-06-06T07:01:00Z"), 7), true);
+  (await runAdviceJob(ctx, { trigger: "schedule" }));
+  assert.equal((await adviceRunDue(ctx.db, at("2026-06-05T18:00:00Z"), 7)), false);
+  assert.equal((await adviceRunDue(ctx.db, at("2026-06-06T07:01:00Z"), 7)), true);
   assert.equal(nextAdviceRun(at("2026-06-05T08:00:00Z"), 7).toISOString(), "2026-06-06T07:00:00.000Z");
 });
 
@@ -165,7 +164,7 @@ test("generic HTTP provider sends JSON with a bearer token", async () => {
   assert.equal((await busy.send({ to: "x", body: "y" })).retry, true);
 });
 
-test("provider settings are checked at start-up", () => {
+test("provider settings are checked at start-up", async () => {
   assert.equal(providerFromEnv({}).name, "log");
   assert.throws(() => providerFromEnv({ SMS_PROVIDER: "africastalking" }), /AT_USERNAME/);
   assert.throws(() => providerFromEnv({ SMS_PROVIDER: "carrier-pigeon" }), /Unknown SMS_PROVIDER/);
@@ -181,7 +180,7 @@ test("over HTTP: run the advice job, see job status, receive delivery reports", 
     const jobs = (await api.call("GET", "/api/jobs")).body;
     assert.equal(jobs.advice.last_runs.length, 1);
     assert.equal(jobs.sms.queued, 1);
-    api.db.prepare("UPDATE message_log SET status = 'sent', provider_id = 'AT-77'").run();
+    await api.db.run("UPDATE message_log SET status = 'sent', provider_id = 'AT-77'");
     const report = await api.call("POST", "/sms/status", { id: "AT-77", status: "Success" });
     assert.equal(report.body.updated, true);
   } finally {
@@ -191,7 +190,7 @@ test("over HTTP: run the advice job, see job status, receive delivery reports", 
 
 test("with WEBHOOK_SECRET set, gateway webhooks need the secret", async () => {
   const { createApp } = await import("../src/app.js");
-  const app = createApp({ db: openDb(":memory:"), content, webhookSecret: "gw-secret", staffAuth: false });
+  const app = createApp({ db: await newDb(), content, webhookSecret: "gw-secret", staffAuth: false });
   const server = await new Promise((ok) => { const s = app.listen(0, () => ok(s)); });
   const base = `http://127.0.0.1:${server.address().port}`;
   try {

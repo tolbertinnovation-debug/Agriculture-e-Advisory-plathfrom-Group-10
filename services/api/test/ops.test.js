@@ -3,21 +3,23 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDb } from "../src/db.js";
 import { createApp } from "../src/app.js";
 import { createStaff } from "../src/staff.js";
 import { cleanFarmerInput, createFarmer } from "../src/farmers.js";
 import { backupDatabase, verifyBackup, listBackupFiles, recordError, resetAlertThrottle, systemStatus, recentErrors } from "../src/ops.js";
 import { backupDue } from "../src/scheduler.js";
-import { content } from "./helpers.js";
+import { content, newDb } from "./helpers.js";
+
+// SQLite backups are .db copies; PostgreSQL backups are .jsonl.gz files with every row.
+const EXT = () => (db.dialect === "sqlite" ? ".db" : ".jsonl.gz");
 
 let db, dir;
-beforeEach(() => {
-  db = openDb(":memory:");
+beforeEach(async () => {
+  db = await newDb();
   dir = mkdtempSync(join(tmpdir(), "agriconnect-backups-"));
   resetAlertThrottle();
 });
-const addFarmer = (phone) => createFarmer(db, cleanFarmerInput({ phone, county: "Bong", consent: true, crops: [{ crop: "rice", planting_month: 5 }] }, content));
+const addFarmer = async (phone) => (await createFarmer(db, cleanFarmerInput({ phone, county: "Bong", consent: true, crops: [{ crop: "rice", planting_month: 5 }] }, content)));
 
 async function serve(opts = {}) {
   const app = createApp({ db, content, webhookSecret: "", providerName: "log", ...opts });
@@ -31,36 +33,36 @@ async function serve(opts = {}) {
 }
 
 // ---------------------------------------------------------------- backups
-test("a backup is a checked, complete copy of the live database", () => {
-  addFarmer("0777000001");
-  addFarmer("0777000002");
-  const r = backupDatabase(db, dir, { now: new Date("2026-11-20T02:00:00Z") });
+test("a backup is a checked, complete copy of the live database", async () => {
+  (await addFarmer("0777000001"));
+  (await addFarmer("0777000002"));
+  const r = (await backupDatabase(db, dir, { now: new Date("2026-11-20T02:00:00Z") }));
   assert.equal(r.ok, true);
   assert.equal(r.integrity, "ok");
   assert.equal(r.farmers, 2);
-  assert.match(r.file, /agriconnect-20261120-020000\.db$/);
-  assert.equal(verifyBackup(r.file).farmers, 2);
+  assert.ok(r.file.endsWith(`agriconnect-20261120-020000${EXT()}`), r.file);
+  assert.equal((await verifyBackup(r.file)).farmers, 2);
 });
 
-test("only the newest backups are kept", () => {
-  for (let d = 1; d <= 5; d++) backupDatabase(db, dir, { now: new Date(`2026-11-0${d}T02:00:00Z`), keep: 3 });
+test("only the newest backups are kept", async () => {
+  for (let d = 1; d <= 5; d++) (await backupDatabase(db, dir, { now: new Date(`2026-11-0${d}T02:00:00Z`), keep: 3 }));
   assert.deepEqual(listBackupFiles(dir).map((f) => f.name), [
-    "agriconnect-20261105-020000.db", "agriconnect-20261104-020000.db", "agriconnect-20261103-020000.db"
+    `agriconnect-20261105-020000${EXT()}`, `agriconnect-20261104-020000${EXT()}`, `agriconnect-20261103-020000${EXT()}`
   ]);
 });
 
-test("a damaged backup file fails its check", () => {
+test("a damaged backup file fails its check", async () => {
   const bad = join(dir, "agriconnect-broken.db");
   writeFileSync(bad, "this is not a database");
-  assert.equal(verifyBackup(bad).ok, false);
+  assert.equal((await verifyBackup(bad)).ok, false);
 });
 
-test("the daily backup is due once a day after the set hour", () => {
-  assert.equal(backupDue(db, new Date("2026-11-20T01:59:00Z"), 2), false);
-  assert.equal(backupDue(db, new Date("2026-11-20T02:01:00Z"), 2), true);
-  backupDatabase(db, dir, { now: new Date("2026-11-20T02:01:00Z") });
-  assert.equal(backupDue(db, new Date("2026-11-20T23:00:00Z"), 2), false);
-  assert.equal(backupDue(db, new Date("2026-11-21T02:00:00Z"), 2), true);
+test("the daily backup is due once a day after the set hour", async () => {
+  assert.equal((await backupDue(db, new Date("2026-11-20T01:59:00Z"), 2)), false);
+  assert.equal((await backupDue(db, new Date("2026-11-20T02:01:00Z"), 2)), true);
+  (await backupDatabase(db, dir, { now: new Date("2026-11-20T02:01:00Z") }));
+  assert.equal((await backupDue(db, new Date("2026-11-20T23:00:00Z"), 2)), false);
+  assert.equal((await backupDue(db, new Date("2026-11-21T02:00:00Z"), 2)), true);
 });
 
 // ---------------------------------------------------------------- errors & status
@@ -71,22 +73,22 @@ test("errors are logged, and alerts are sent at most once every 5 minutes", asyn
   const quiet = { log: console.error };
   console.error = () => {};
   try {
-    recordError(db, new Error("first"), { path: "/api/x", method: "GET" }, { webhookUrl: "https://hooks.example/abc", fetch: fakeFetch, now: t0 });
-    recordError(db, new Error("second"), {}, { webhookUrl: "https://hooks.example/abc", fetch: fakeFetch, now: new Date(t0.getTime() + 60000) });
-    recordError(db, new Error("third"), {}, { webhookUrl: "https://hooks.example/abc", fetch: fakeFetch, now: new Date(t0.getTime() + 6 * 60000) });
+    (await recordError(db, new Error("first"), { path: "/api/x", method: "GET" }, { webhookUrl: "https://hooks.example/abc", fetch: fakeFetch, now: t0 }));
+    (await recordError(db, new Error("second"), {}, { webhookUrl: "https://hooks.example/abc", fetch: fakeFetch, now: new Date(t0.getTime() + 60000) }));
+    (await recordError(db, new Error("third"), {}, { webhookUrl: "https://hooks.example/abc", fetch: fakeFetch, now: new Date(t0.getTime() + 6 * 60000) }));
   } finally { console.error = quiet.log; }
   await new Promise((r) => setTimeout(r, 10));
   assert.deepEqual(sent, ["AgriConnect error: first [GET /api/x]", "AgriConnect error: third (+1 more since the last alert)"]);
-  assert.deepEqual(recentErrors(db).map((e) => e.message), ["third", "second", "first"]);
+  assert.deepEqual((await recentErrors(db)).map((e) => e.message), ["third", "second", "first"]);
 });
 
-test("system status warns about missing backups, fake SMS and errors", () => {
-  const s = systemStatus(db, { now: new Date(), backupDir: undefined, smsProvider: "log" });
+test("system status warns about missing backups, fake SMS and errors", async () => {
+  const s = (await systemStatus(db, { now: new Date(), backupDir: undefined, smsProvider: "log" }));
   assert.equal(s.ok, false);
   assert.ok(s.warnings.some((w) => w.includes("Backups are off")));
   assert.ok(s.warnings.some((w) => w.includes("NOT sent to real phones")));
-  backupDatabase(db, dir);
-  const s2 = systemStatus(db, { now: new Date(), backupDir: dir, smsProvider: "africastalking" });
+  (await backupDatabase(db, dir));
+  const s2 = (await systemStatus(db, { now: new Date(), backupDir: dir, smsProvider: "africastalking" }));
   assert.equal(s2.backup.ok, true);
   assert.ok(!s2.warnings.some((w) => w.includes("backup")));
 });
@@ -131,18 +133,18 @@ test("/ready checks the database; unexpected errors are logged, not shown", asyn
   console.error = () => {};
   try {
     assert.equal((await s.call("GET", "/ready")).body.ok, true);
-    db.exec("DROP TABLE broadcasts"); // simulate a broken database
+    await db.exec("DROP TABLE broadcasts"); // simulate a broken database
     const r = await s.call("GET", "/api/broadcasts");
     assert.equal(r.status, 500);
     assert.equal(r.body.error, "Something went wrong");
-    assert.match(recentErrors(db)[0].message, /no such table/);
-    assert.equal(recentErrors(db)[0].context.path, "/api/broadcasts");
+    assert.match((await recentErrors(db))[0].message, /no such table|does not exist/);
+    assert.equal((await recentErrors(db))[0].context.path, "/api/broadcasts");
   } finally { console.error = quiet; await s.close(); }
 });
 
 test("admin status and backup-now are admin-only", async () => {
-  createStaff(db, { email: "admin@test.lr", name: "A", role: "admin", password: "correct-horse-battery" });
-  createStaff(db, { email: "off@test.lr", name: "O", role: "officer", counties: ["Bong"], password: "correct-horse-battery" });
+  (await createStaff(db, { email: "admin@test.lr", name: "A", role: "admin", password: "correct-horse-battery" }));
+  (await createStaff(db, { email: "off@test.lr", name: "O", role: "officer", counties: ["Bong"], password: "correct-horse-battery" }));
   const s = await serve({ backupDir: dir });
   try {
     const tok = async (email) => (await s.call("POST", "/api/staff/login", { email, password: "correct-horse-battery" })).body.token;

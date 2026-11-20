@@ -1,11 +1,11 @@
 # Deploying AgriConnect on a server
 
-This guide puts AgriConnect online at an HTTPS address such as `https://agriconnect.example.org`, with daily checked backups. It takes about an hour the first time. Everything runs in Docker: the app, plus **Caddy**, which gets and renews the HTTPS certificate for free.
+This guide puts AgriConnect online at an HTTPS address such as `https://agriconnect.example.org`, with daily checked backups. It takes about an hour the first time. Everything runs in Docker: the app, its **PostgreSQL** database, and **Caddy**, which gets and renews the HTTPS certificate for free.
 
 ```
 Internet ──► Caddy (ports 80/443, HTTPS) ──► AgriConnect app (port 3000, inside Docker)
-                                                 ├─ database   → Docker volume "agriconnect-data"
-                                                 └─ backups    → deploy/backups/ on the server
+                                                 ├─ PostgreSQL 16 → Docker volume "postgres-data" (not reachable from the internet)
+                                                 └─ backups       → deploy/backups/ on the server
 ```
 
 ## What you need
@@ -35,17 +35,17 @@ At your domain registrar, add a DNS **A record**: `agriconnect.example.org → y
 git clone https://github.com/tolbertinnovation-debug/Agriculture-e-Advisory-plathfrom-Group-10.git agriconnect
 cd agriconnect/deploy
 cp .env.example .env
-nano .env          # set DOMAIN, WEBHOOK_SECRET (a long random string) and the SMS settings when you have them
+nano .env          # set DOMAIN, POSTGRES_PASSWORD, WEBHOOK_SECRET and the SMS settings when you have them
 mkdir -p backups && sudo chown 1000:1000 backups   # the app runs as user 1000 inside Docker
 ```
-To make a random secret: `openssl rand -hex 32`.
+To make a random secret or password: `openssl rand -hex 24` (use it for `POSTGRES_PASSWORD` and `WEBHOOK_SECRET`; letters and digits only).
 
 **Never commit `.env` to GitHub.** It holds your keys.
 
 ## 4. Start it
 ```bash
 docker compose up -d --build
-docker compose ps            # "api" should become (healthy)
+docker compose ps            # "db" and "api" should become (healthy)
 docker compose logs -f api   # Ctrl+C to stop watching
 ```
 Open `https://agriconnect.example.org/health`. You should see `{"ok":true,...}` with a padlock in the browser.
@@ -76,7 +76,8 @@ The server **refuses to start** if a real SMS provider is set without `WEBHOOK_S
 Test with the team's own phones on **both** Lonestar Cell MTN and Orange before any farmer is told about the service.
 
 ## 7. Backups
-- **Automatic:** every day at `BACKUP_HOUR` (02:00 Liberia time). Each backup is opened and checked (integrity check, tables readable) right after it is made. The newest `BACKUP_KEEP` (14) are kept in `deploy/backups/`.
+- **Automatic:** every day at `BACKUP_HOUR` (02:00 Liberia time) the app writes every row of every table to `agriconnect-YYYYMMDD-HHMMSS.jsonl.gz` in `deploy/backups/`. It is read back and its row counts are checked right after it is made. The newest `BACKUP_KEEP` (14) are kept.
+- **Extra safety (optional):** PostgreSQL's own dump as well: `docker compose exec db pg_dump -U agriconnect -Fc agriconnect > backups/pg-$(date +%F).dump`.
 - **By hand:** dashboard → Staff & security → System status → **Back up now**, or `docker compose exec api npm run backup`.
 - **Off-site copy (do this!):** a backup on the same server is lost if the server is. Copy `deploy/backups/` somewhere else every day, e.g. with a cron job to another machine or cloud storage:
   ```bash
@@ -88,10 +89,18 @@ Test with the team's own phones on **both** Lonestar Cell MTN and Orange before 
 ```bash
 cd ~/agriconnect/deploy
 docker compose stop api
-docker compose run --rm api npm run restore -- /backups/agriconnect-YYYYMMDD-HHMMSS.db --yes
+docker compose run --rm api npm run restore -- /backups/agriconnect-YYYYMMDD-HHMMSS.jsonl.gz --yes
 docker compose start api
 ```
-The restore checks the backup first, and keeps the current database as `agriconnect.db.before-restore-…`, so it can be undone.
+The restore checks the backup first and replaces all rows in **one transaction**: if anything goes wrong, nothing changes. Make a fresh backup before restoring, so a restore can be undone.
+
+### Moving from a SQLite server (e.g. the hackathon demo) to PostgreSQL
+If you already ran AgriConnect with SQLite and want to keep its data, copy the `.db` file onto the new server, then:
+```bash
+docker compose cp agriconnect.db api:/tmp/old.db
+docker compose exec api npm run sqlite-to-postgres -- /tmp/old.db --yes
+```
+It checks the file, copies everything in one transaction, then compares row counts table by table. It refuses to overwrite a PostgreSQL database that already has farmers or staff (add `--replace` if you really mean it).
 
 ## 8. Keep an eye on it
 - **System status:** Staff & security → *System status* (admins). It shows the last backup, SMS waiting or failed, weather, the daily advice run, server errors, and a list of warnings.

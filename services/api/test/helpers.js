@@ -1,5 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { randomBytes } from "node:crypto";
+import pg from "pg";
 import { openDb } from "../src/db.js";
 import { loadContent } from "../src/content.js";
 import { createApp } from "../src/app.js";
@@ -8,9 +10,30 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const CONTENT_DIR = resolve(here, "../../../content");
 export const content = loadContent(CONTENT_DIR);
 
-/** Start the API on a random port with an empty in-memory database. */
+/**
+ * A fresh, empty database for one test.
+ * Default: SQLite in memory. With TEST_DATABASE_URL=postgres://… every test gets its own
+ * PostgreSQL schema, dropped again by db.close(): the same tests run on both databases.
+ */
+export const TEST_PG = process.env.TEST_DATABASE_URL;
+export async function newDb() {
+  if (!TEST_PG) return openDb(":memory:");
+  const schema = `t_${randomBytes(6).toString("hex")}`;
+  const db = await openDb(TEST_PG, { schema, max: 4 });
+  const close = db.close.bind(db);
+  db.close = async () => {
+    await close();
+    const c = new pg.Client({ connectionString: TEST_PG });
+    await c.connect();
+    await c.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+    await c.end();
+  };
+  return db;
+}
+
+/** Start the API on a random port with an empty database. */
 export async function startTestServer({ now, staffAuth = false } = {}) {
-  const db = openDb(":memory:");
+  const db = await newDb();
   const app = createApp({ db, content, now, staffAuth, webhookSecret: "" });
   const server = await new Promise((ok) => {
     const s = app.listen(0, () => ok(s));
@@ -24,7 +47,7 @@ export async function startTestServer({ now, staffAuth = false } = {}) {
     });
     return { status: res.status, body: await res.json() };
   };
-  return { db, base, call, close: () => new Promise((ok) => server.close(ok)) };
+  return { db, base, call, close: async () => { await new Promise((ok) => server.close(ok)); await db.close(); } };
 }
 
 export const kollie = {

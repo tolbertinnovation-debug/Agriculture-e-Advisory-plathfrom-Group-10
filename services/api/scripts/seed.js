@@ -17,7 +17,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-const db = openDb(process.env.DB_PATH ?? resolve(here, "../data/agriconnect.db"));
+const db = await openDb(process.env.DATABASE_URL || process.env.DB_PATH || resolve(here, "../data/agriconnect.db"));
 const content = loadContent(process.env.CONTENT_DIR ?? resolve(here, "../../../content"));
 
 // Demo people are fictional. Phone numbers use a test range.
@@ -32,8 +32,8 @@ const farmers = [
 
 let added = 0;
 for (const f of farmers) {
-  if (getFarmerByPhone(db, f.phone)) continue;
-  createFarmer(db, cleanFarmerInput({ ...f, consent: true, channel: "assisted" }, content));
+  if (await getFarmerByPhone(db, f.phone)) continue;
+  await createFarmer(db, cleanFarmerInput({ ...f, consent: true, channel: "assisted" }, content));
   added++;
 }
 
@@ -48,10 +48,10 @@ const reports = [
 
 // Only add the demo reports and questions the first time, so running seed twice doesn't duplicate them.
 if (added) {
-  for (const r of reports) createPestReport(db, content, r);
-  createQuestion(db, { farmer: getFarmerByPhone(db, "0770000001"), kind: "text", channel: "sms", body: "My pepper leaves are curling and turning yellow. What can I do?" });
-  createQuestion(db, { farmer: getFarmerByPhone(db, "0770000002"), kind: "callback", channel: "ussd" });
-  createQuestion(db, { farmer: getFarmerByPhone(db, "0770000004"), kind: "text", channel: "sms", body: "When is the best time to harvest cassava for gari?" });
+  for (const r of reports) await createPestReport(db, content, r);
+  await createQuestion(db, { farmer: await getFarmerByPhone(db, "0770000001"), kind: "text", channel: "sms", body: "My pepper leaves are curling and turning yellow. What can I do?" });
+  await createQuestion(db, { farmer: await getFarmerByPhone(db, "0770000002"), kind: "callback", channel: "ussd" });
+  await createQuestion(db, { farmer: await getFarmerByPhone(db, "0770000004"), kind: "text", channel: "sms", body: "When is the best time to harvest cassava for gari?" });
 }
 
 // Market reporters and two weeks of SAMPLE prices (LRD) for every market.
@@ -59,15 +59,15 @@ const BASE = { "rice-local": 45, "rice-imported": 4100, cassava: 500, gari: 30, 
 const MARKET_FACTOR = { redlight: 1.15, gbarnga: 1, ganta: 1.02, voinjama: 0.9, buchanan: 1.08, kakata: 1.05 };
 const ctx = { db, content, now: () => new Date() };
 let prices = 0;
-if (!db.prepare("SELECT 1 FROM prices LIMIT 1").get()) {
-  content.markets.forEach((m, i) => addReporter(ctx, { phone: `08860000${String(i + 1).padStart(2, "0")}`, name: `${m.name} reporter`, market: m.id }));
-  const insert = db.prepare("INSERT INTO prices (market, item, price_lrd, reporter, status, reported_at) VALUES (?, ?, ?, 'seed', 'ok', ?)");
+if (!(await db.get("SELECT 1 AS x FROM prices LIMIT 1"))) {
+  for (const [i, m] of content.markets.entries()) await addReporter(ctx, { phone: `08860000${String(i + 1).padStart(2, "0")}`, name: `${m.name} reporter`, market: m.id });
+  const insert = (...args) => db.run("INSERT INTO prices (market, item, price_lrd, reporter, status, reported_at) VALUES (?, ?, ?, 'seed', 'ok', ?)", ...args);
   for (const m of content.markets) for (const it of content.items) {
     if (it.id === "cocoa" && !["ganta", "voinjama"].includes(m.id)) continue; // cocoa is traded up-country
     for (const daysAgo of [12, 9, 5, 1]) {
       const trend = daysAgo > 7 ? 0.94 : 1; // prices a bit lower last week
       const price = Math.round(BASE[it.id] * MARKET_FACTOR[m.id] * trend * (0.97 + ((daysAgo * 7 + it.id.length) % 7) / 100));
-      insert.run(m.id, it.id, price, new Date(Date.now() - daysAgo * 86400000).toISOString());
+      await insert(m.id, it.id, price, new Date(Date.now() - daysAgo * 86400000).toISOString());
       prices++;
     }
   }
@@ -75,13 +75,13 @@ if (!db.prepare("SELECT 1 FROM prices LIMIT 1").get()) {
 
 // A SAMPLE forecast so the demo works without internet. It is shown as "sample" and is
 // replaced by the real Open-Meteo forecast as soon as the server can reach it.
-if (!db.prepare("SELECT 1 FROM weather_forecasts LIMIT 1").get()) {
+if (!(await db.get("SELECT 1 AS x FROM weather_forecasts LIMIT 1"))) {
   const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
-  Object.keys(COUNTY_POINTS).forEach((county, i) => {
+  for (const [i, county] of Object.keys(COUNTY_POINTS).entries()) {
     const rain = i % 3 === 0 ? [80, 85, 40, 20, 15] : [35, 20, 25, 45, 30];
     const days = rain.map((r, n) => ({ date: day(n), rain_prob: r, rain_mm: r >= 70 ? 22 : 2, t_max: 30 + (n % 3), t_min: 23, code: r >= 70 ? 63 : 2 }));
-    db.prepare("INSERT INTO weather_forecasts (county, days, fetched_at) VALUES (?, ?, 'sample')").run(county, JSON.stringify(days));
-  });
+    await db.run("INSERT INTO weather_forecasts (county, days, fetched_at) VALUES (?, ?, 'sample')", county, JSON.stringify(days));
+  }
 }
 
 // Demo staff accounts for the dashboard (LOCAL DEMO ONLY: these passwords are public in this file).
@@ -93,8 +93,8 @@ const DEMO_STAFF = [
 ];
 let staffAdded = 0;
 for (const s of DEMO_STAFF) {
-  if (db.prepare("SELECT 1 FROM staff WHERE email = ?").get(s.email)) continue;
-  createStaff(db, s);
+  if (await db.get("SELECT 1 AS x FROM staff WHERE email = ?", s.email)) continue;
+  await createStaff(db, s);
   staffAdded++;
 }
 if (staffAdded) {
@@ -103,3 +103,4 @@ if (staffAdded) {
 }
 
 console.log(`Seeded ${added} new farmers${added ? `, ${reports.length} pest reports and 3 questions` : " (demo data already present)"}${prices ? `, ${prices} sample prices` : ""}.`);
+await db.close();

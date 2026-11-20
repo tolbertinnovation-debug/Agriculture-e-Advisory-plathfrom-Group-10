@@ -1,13 +1,12 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createApp } from "../src/app.js";
-import { openDb } from "../src/db.js";
 import { createStaff, hashPassword, verifyPassword, totpAt, base32Encode, base32Decode, checkTotp, can } from "../src/staff.js";
-import { content } from "./helpers.js";
+import { content, newDb } from "./helpers.js";
 
 let server, base, db, clock;
 async function start(opts = {}) {
-  db = openDb(":memory:");
+  db = await newDb();
   clock = new Date("2026-06-05T08:00:00Z");
   const app = createApp({ db, content, now: () => clock, staffAuth: true, webhookSecret: "", providerName: "log", ...opts });
   server = await new Promise((ok) => { const s = app.listen(0, () => ok(s)); });
@@ -25,22 +24,22 @@ async function call(method, path, body, token) {
   return { status: res.status, body: await res.json() };
 }
 const PW = "correct-horse-battery";
-function account(role, counties = [], email = `${role}@test.lr`) {
-  return createStaff(db, { email, name: role.toUpperCase(), role, counties, password: PW }).staff;
+async function account(role, counties = [], email = `${role}@test.lr`) {
+  return (await createStaff(db, { email, name: role.toUpperCase(), role, counties, password: PW })).staff;
 }
 async function logIn(email, password = PW, code) {
   const r = await call("POST", "/api/staff/login", { email, password, code });
   return r;
 }
 async function tokenFor(role, counties, email) {
-  account(role, counties, email);
+  (await account(role, counties, email));
   return (await logIn(email ?? `${role}@test.lr`)).body.token;
 }
 /** The current authenticator code for a secret, at a given time. */
 const codeFor = (secret, at = clock) => totpAt(base32Decode(secret), Math.floor(at.getTime() / 30000));
 
 // ---------------------------------------------------------------- building blocks
-test("TOTP matches the RFC 6238 test vectors", () => {
+test("TOTP matches the RFC 6238 test vectors", async () => {
   const secret = Buffer.from("12345678901234567890");
   assert.equal(totpAt(secret, Math.floor(59 / 30), 8), "94287082");
   assert.equal(totpAt(secret, Math.floor(1111111109 / 30), 8), "07081804");
@@ -51,7 +50,7 @@ test("TOTP matches the RFC 6238 test vectors", () => {
   assert.equal(checkTotp(b32, "12345", clock), null);
 });
 
-test("passwords are hashed with scrypt and checked safely", () => {
+test("passwords are hashed with scrypt and checked safely", async () => {
   const h = hashPassword("a-long-password");
   assert.match(h, /^scrypt\$16384\$8\$1\$/);
   assert.equal(verifyPassword("a-long-password", h), true);
@@ -59,7 +58,7 @@ test("passwords are hashed with scrypt and checked safely", () => {
   assert.notEqual(hashPassword("a-long-password"), h, "salted");
 });
 
-test("role permissions", () => {
+test("role permissions", async () => {
   assert.equal(can({ role: "admin" }, "anything"), true);
   assert.equal(can({ role: "officer" }, "broadcasts:send"), true);
   assert.equal(can({ role: "officer" }, "staff:manage"), false);
@@ -79,7 +78,7 @@ test("officer routes need a login now; public and farmer routes do not", async (
 });
 
 test("log in, see who I am, log out", async () => {
-  account("admin");
+  (await account("admin"));
   const r = await logIn("ADMIN@test.lr");
   assert.equal(r.status, 200);
   assert.equal(r.body.staff.role, "admin");
@@ -91,7 +90,7 @@ test("log in, see who I am, log out", async () => {
 });
 
 test("wrong passwords lock the account for 15 minutes after 5 tries; unknown emails look the same", async () => {
-  account("officer", ["Bong"]);
+  (await account("officer", ["Bong"]));
   assert.equal((await logIn("nobody@test.lr")).body.error, "Wrong email or password");
   for (let i = 0; i < 5; i++) assert.equal((await logIn("officer@test.lr", "wrong-password")).status, 401);
   const locked = await logIn("officer@test.lr");
@@ -127,7 +126,7 @@ test("2-step login: set up, then every login needs a fresh code", async () => {
 test("with REQUIRE_2FA, a new account can only set up 2-step login until it is on", async () => {
   await new Promise((ok) => server.close(ok));
   await start({ require2fa: true });
-  account("officer", ["Bong"]);
+  (await account("officer", ["Bong"]));
   const r = await logIn("officer@test.lr");
   assert.equal(r.body.needs_2fa_setup, true);
   const blocked = await call("GET", "/api/pest-reports", null, r.body.token);

@@ -16,15 +16,19 @@ const bearer = (req) => (req.get("authorization") ?? "").replace(/^Bearer\s+/i, 
  *   need(perm)   signed in AND allowed by their role
  */
 export function staffGuards({ db, now, enabled = true }) {
-  const authenticate = (allowSetup) => (req, res, next) => {
-    if (!enabled) { req.staff = NO_AUTH_ADMIN; return next(); }
-    const token = bearer(req);
-    const staff = sessionStaff(db, token, now());
-    if (!staff) return res.status(401).json({ error: "Please log in", login: true });
-    if (!staff.mfa_ok && !allowSetup) return res.status(403).json({ error: "Set up 2-step login first", setup_2fa: true });
-    req.staff = staff;
-    req.staffToken = token;
-    next();
+  const authenticate = (allowSetup) => async (req, res, next) => {
+    try {
+      if (!enabled) { req.staff = NO_AUTH_ADMIN; return next(); }
+      const token = bearer(req);
+      const staff = await sessionStaff(db, token, now());
+      if (!staff) return res.status(401).json({ error: "Please log in", login: true });
+      if (!staff.mfa_ok && !allowSetup) return res.status(403).json({ error: "Set up 2-step login first", setup_2fa: true });
+      req.staff = staff;
+      req.staffToken = token;
+      next();
+    } catch (err) {
+      next(err);
+    }
   };
   const staff = authenticate(false);
   const staffDuringSetup = authenticate(true);
@@ -59,77 +63,78 @@ export function staffRoutes(app, ctx, guards, { require2fa = false } = {}) {
   const { staffDuringSetup, need } = guards;
   const me = (s) => ({ ...s, permissions: permissionsFor(s.role) });
 
-  app.post("/api/staff/login", (req, res) => {
+  app.post("/api/staff/login", async (req, res, next) => {
     try {
-      const r = login(db, req.body ?? {}, now(), { require2fa });
-      audit(db, r.staff, "login");
+      const r = await login(db, req.body ?? {}, now(), { require2fa });
+      await audit(db, r.staff, "login");
       res.json({ token: r.token, staff: me(r.staff), needs_2fa_setup: r.needs_2fa_setup });
     } catch (err) {
-      if (err.status === 401 && !err.extra?.needs_code) audit(db, null, "login.failed", String(req.body?.email ?? "").slice(0, 120));
-      res.status(err.status ?? 500).json({ error: err.message, ...(err.extra ?? {}) });
+      if (!err.auth) return next(err);
+      if (err.status === 401 && !err.extra?.needs_code) await audit(db, null, "login.failed", String(req.body?.email ?? "").slice(0, 120));
+      res.status(err.status).json({ error: err.message, ...(err.extra ?? {}) });
     }
   });
 
-  app.post("/api/staff/logout", staffDuringSetup, (req, res) => {
-    logout(db, req.staffToken);
+  app.post("/api/staff/logout", staffDuringSetup, async (req, res) => {
+    await logout(db, req.staffToken);
     res.json({ ok: true });
   });
 
   app.get("/api/staff/me", staffDuringSetup, (req, res) => res.json(me(req.staff)));
 
-  app.post("/api/staff/me/password", staffDuringSetup, (req, res) => {
-    const row = db.prepare("SELECT password_hash FROM staff WHERE id = ?").get(req.staff.id);
+  app.post("/api/staff/me/password", staffDuringSetup, async (req, res) => {
+    const row = await db.get("SELECT password_hash FROM staff WHERE id = ?", req.staff.id);
     if (!row || !verifyPassword(String(req.body?.current ?? ""), row.password_hash)) throw new AccessError("Your current password is wrong", 400);
-    setPassword(db, req.staff.id, req.body?.new);
-    audit(db, req.staff, "password.change");
+    await setPassword(db, req.staff.id, req.body?.new);
+    await audit(db, req.staff, "password.change");
     res.json({ ok: true, note: "Password changed. Please log in again." });
   });
 
   // 2-step login: start (get a secret for the authenticator app), then confirm with a code.
-  app.post("/api/staff/me/2fa/start", staffDuringSetup, (req, res) => res.json(start2fa(db, req.staff.id)));
-  app.post("/api/staff/me/2fa/enable", staffDuringSetup, (req, res) => {
-    enable2fa(db, req.staff.id, String(req.body?.code ?? ""), now(), req.staffToken);
-    audit(db, req.staff, "2fa.enable");
+  app.post("/api/staff/me/2fa/start", staffDuringSetup, async (req, res) => res.json(await start2fa(db, req.staff.id)));
+  app.post("/api/staff/me/2fa/enable", staffDuringSetup, async (req, res) => {
+    await enable2fa(db, req.staff.id, String(req.body?.code ?? ""), now(), req.staffToken);
+    await audit(db, req.staff, "2fa.enable");
     res.json({ ok: true });
   });
-  app.post("/api/staff/me/2fa/disable", staffDuringSetup, (req, res) => {
+  app.post("/api/staff/me/2fa/disable", staffDuringSetup, async (req, res) => {
     if (require2fa) throw new AccessError("2-step login is required on this server", 400);
-    const row = db.prepare("SELECT password_hash FROM staff WHERE id = ?").get(req.staff.id);
+    const row = await db.get("SELECT password_hash FROM staff WHERE id = ?", req.staff.id);
     if (!verifyPassword(String(req.body?.password ?? ""), row.password_hash)) throw new AccessError("Wrong password", 400);
-    disable2fa(db, req.staff.id);
-    audit(db, req.staff, "2fa.disable");
+    await disable2fa(db, req.staff.id);
+    await audit(db, req.staff, "2fa.disable");
     res.json({ ok: true });
   });
 
   // ---- Admin: manage staff ----
-  app.get("/api/staff", ...need("staff:manage"), (req, res) => res.json(listStaff(db)));
+  app.get("/api/staff", ...need("staff:manage"), async (req, res) => res.json(await listStaff(db)));
 
-  app.post("/api/staff", ...need("staff:manage"), (req, res) => {
-    const { staff, password } = createStaff(db, { ...req.body, password: undefined });
-    audit(db, req.staff, "staff.create", staff.email, { role: staff.role, counties: staff.counties });
+  app.post("/api/staff", ...need("staff:manage"), async (req, res) => {
+    const { staff, password } = await createStaff(db, { ...req.body, password: undefined });
+    await audit(db, req.staff, "staff.create", staff.email, { role: staff.role, counties: staff.counties });
     // The password is shown ONCE: give it to the person, who should change it.
     res.status(201).json({ staff, password });
   });
 
-  app.patch("/api/staff/:id", ...need("staff:manage"), (req, res) => {
+  app.patch("/api/staff/:id", ...need("staff:manage"), async (req, res) => {
     const id = Number(req.params.id);
     if (id === req.staff.id && (req.body?.active === false || (req.body?.role && req.body.role !== "admin")))
       throw new AccessError("You cannot remove your own admin access", 400);
-    const updated = updateStaff(db, id, req.body ?? {});
+    const updated = await updateStaff(db, id, req.body ?? {});
     if (!updated) return res.status(404).json({ error: "Staff member not found" });
-    audit(db, req.staff, "staff.update", updated.email, req.body);
+    await audit(db, req.staff, "staff.update", updated.email, req.body);
     res.json(updated);
   });
 
-  app.post("/api/staff/:id/reset-password", ...need("staff:manage"), (req, res) => {
-    const target = getStaff(db, Number(req.params.id));
+  app.post("/api/staff/:id/reset-password", ...need("staff:manage"), async (req, res) => {
+    const target = await getStaff(db, Number(req.params.id));
     if (!target) return res.status(404).json({ error: "Staff member not found" });
     const password = generatePassword();
-    setPassword(db, target.id, password);
-    if (req.body?.reset_2fa) disable2fa(db, target.id);
-    audit(db, req.staff, "staff.reset_password", target.email, { reset_2fa: !!req.body?.reset_2fa });
+    await setPassword(db, target.id, password);
+    if (req.body?.reset_2fa) await disable2fa(db, target.id);
+    await audit(db, req.staff, "staff.reset_password", target.email, { reset_2fa: !!req.body?.reset_2fa });
     res.json({ password });
   });
 
-  app.get("/api/audit", ...need("audit:read"), (req, res) => res.json(listAudit(db, { limit: Math.min(Number(req.query.limit) || 100, 500) })));
+  app.get("/api/audit", ...need("audit:read"), async (req, res) => res.json(await listAudit(db, { limit: Math.min(Number(req.query.limit) || 100, 500) })));
 }

@@ -1,14 +1,13 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createApp } from "../src/app.js";
-import { openDb } from "../src/db.js";
-import { content } from "./helpers.js";
+import { content, newDb } from "./helpers.js";
 
 let server, base, db, clock;
 const PHONE = "0777 123 999";
 
 async function start({ providerName = "log" } = {}) {
-  db = openDb(":memory:");
+  db = await newDb();
   clock = new Date("2026-06-05T08:00:00Z");
   const app = createApp({ db, content, now: () => clock, staffAuth: false, webhookSecret: "", providerName });
   server = await new Promise((ok) => { const s = app.listen(0, () => ok(s)); });
@@ -39,7 +38,7 @@ test("sign in with an SMS code; the code is sent by SMS", async () => {
   const r = await call("POST", "/api/auth/request-code", { phone: PHONE });
   assert.equal(r.status, 200);
   assert.match(r.body.dev_code, /^\d{6}$/);
-  const sms = db.prepare("SELECT body FROM message_log WHERE phone = '+231777123999'").get();
+  const sms = await db.get("SELECT body FROM message_log WHERE phone = '+231777123999'");
   assert.match(sms.body, new RegExp(`code is ${r.body.dev_code}`));
   const v = await call("POST", "/api/auth/verify", { phone: PHONE, code: r.body.dev_code });
   assert.equal(v.body.registered, false);
@@ -95,7 +94,7 @@ test("register in the app, then load home with this week's advice", async () => 
   assert.equal(home.body.farmer.county, "Bong");
   assert.equal(home.body.advice[0].stage, "first-weeding");
   // welcome + first advice + sign-in code were sent by SMS
-  const kinds = db.prepare("SELECT kind FROM message_log WHERE phone = '+231777123999' ORDER BY id").all().map((r) => r.kind);
+  const kinds = (await db.all("SELECT kind FROM message_log WHERE phone = '+231777123999' ORDER BY id")).map((r) => r.kind);
   assert.deepEqual(kinds, ["alert", "welcome", "advice"]);
 });
 

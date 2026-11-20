@@ -13,7 +13,14 @@ npm install
 ```bash
 npm test
 ```
-You should see `# pass 125` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
+You should see `# pass 134` and `# fail 0`.
+
+To run the same tests on PostgreSQL (what servers use), start one with Docker and point the tests at it:
+```bash
+docker run -d --name agri-pg -e POSTGRES_PASSWORD=devpass -p 5433:5432 postgres:16-alpine
+TEST_DATABASE_URL=postgres://postgres:devpass@127.0.0.1:5433/postgres npm test
+```
+Each test gets its own empty schema, which is dropped afterwards. GitHub runs both. The tests also run automatically on GitHub every time someone pushes.
 
 ## 3. Add demo data and start the API
 ```bash
@@ -152,6 +159,11 @@ curl -X POST http://localhost:3000/api/farmers \
   -d '{"phone":"0777 555 111","name":"Test Farmer","county":"Lofa","consent":true,"crops":[{"crop":"rice","planting_month":5}]}'
 ```
 
+### Database: SQLite or PostgreSQL
+The same code runs on both. On a laptop nothing is needed: SQLite is built into Node.js. On a server, set `DATABASE_URL` (Docker Compose does this for you) and AgriConnect uses PostgreSQL. The tables are created and updated automatically by numbered **migrations** (`MIGRATIONS` in `src/db.js`, recorded in the `schema_migrations` table). To change the database later, add a new migration at the end; never edit one that has already run on a server.
+
+Writing code that touches the database: every call is `await db.get / all / run / exec / tx(...)`, use `?` placeholders, `INSERT … RETURNING id` for new ids, and pass times as parameters (`sqlNow()`, `sqlDaysAgo()`), never database time functions. Run the tests on both databases before pushing.
+
 ## Project layout
 ```
 content/              crop calendars, pest table, markets & price items (JSON). Agronomists edit these; every SMS must be ≤160 characters
@@ -248,7 +260,8 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | Name | Default | Meaning |
 |---|---|---|
 | `PORT` | `3000` | Port the API listens on |
-| `DB_PATH` | `services/api/data/agriconnect.db` | Database file (delete it to start fresh) |
+| `DATABASE_URL` | *(unset)* | `postgres://user:password@host:5432/db` → use PostgreSQL (servers). Unset → SQLite file at `DB_PATH` (laptops) |
+| `DB_PATH` | `services/api/data/agriconnect.db` | SQLite database file (delete it to start fresh) |
 | `CONTENT_DIR` | `content/` | Where the advisory content lives |
 | `SMS_PROVIDER` | `log` | `log`, `africastalking` or `http`; see section 6 |
 | `ADVICE_HOUR` | `7` | Hour (Liberia time = UTC) for the daily crop advice |

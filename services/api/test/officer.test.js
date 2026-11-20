@@ -6,7 +6,7 @@ let api;
 beforeEach(async () => { api = await startTestServer(); });
 afterEach(() => api.close());
 
-const farmer = (phone, county, crops = ["rice"]) =>
+const farmer = async (phone, county, crops = ["rice"]) =>
   api.call("POST", "/api/farmers", { phone, county, consent: true, crops: crops.map((crop) => ({ crop, planting_month: 5 })) });
 const report = (phone, county, symptoms = ["holes", "caterpillar"], crop = "rice") =>
   api.call("POST", "/api/pest-reports", { phone, county, crop, symptoms, channel: "ussd" });

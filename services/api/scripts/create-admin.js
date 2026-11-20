@@ -12,15 +12,16 @@ if (!email) {
   process.exit(1);
 }
 const here = dirname(fileURLToPath(import.meta.url));
-const db = openDb(process.env.DB_PATH ?? resolve(here, "../data/agriconnect.db"));
-const existing = db.prepare("SELECT id, role FROM staff WHERE email = ?").get(email.trim().toLowerCase());
+const db = await openDb(process.env.DATABASE_URL || process.env.DB_PATH || resolve(here, "../data/agriconnect.db"));
+const existing = await db.get("SELECT id, role FROM staff WHERE email = ?", email.trim().toLowerCase());
 if (existing) {
   const password = generatePassword();
-  setPassword(db, existing.id, password);
-  db.prepare("UPDATE staff SET role = 'admin', active = 1 WHERE id = ?").run(existing.id);
+  await setPassword(db, existing.id, password);
+  await db.run("UPDATE staff SET role = 'admin', active = 1 WHERE id = ?", existing.id);
   console.log(`Password reset for ${email} (now an active admin).\nNew password: ${password}`);
 } else {
-  const { staff, password } = createStaff(db, { email, name: nameParts.join(" ") || "Admin", role: "admin", counties: [] });
+  const { staff, password } = await createStaff(db, { email, name: nameParts.join(" ") || "Admin", role: "admin", counties: [] });
   console.log(`Admin created: ${staff.email}\nPassword (shown once): ${password}`);
 }
 console.log("Log in at /prototype/dashboard.html, change the password and turn on 2-step login.");
+await db.close();

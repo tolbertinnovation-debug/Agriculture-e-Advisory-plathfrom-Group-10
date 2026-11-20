@@ -20,6 +20,33 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  api-tests-postgres:
+    # The same tests again, on a real PostgreSQL 16 (every test gets its own schema).
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: agriconnect_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: services/api
+    env:
+      TEST_DATABASE_URL: postgres://postgres:ci@localhost:5432/agriconnect_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/api/package-lock.json
+      - run: npm ci
+      - run: npm test
+
   docker-image:
     runs-on: ubuntu-latest
     steps:

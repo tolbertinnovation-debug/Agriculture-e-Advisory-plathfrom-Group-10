@@ -23,7 +23,7 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 ```bash
 cd services/api
 npm install
-npm test        # 125 tests
+npm test        # 134 tests (also run on PostgreSQL in CI)
 npm run seed    # demo farmers
 npm run dev
 ```
@@ -37,9 +37,9 @@ The USSD simulator and the officer dashboard (`/prototype/dashboard.html`) go **
 Full guide: [docs/dev-setup.md](docs/dev-setup.md). Needs Node.js 22.13 or newer; no database to install.
 
 ## Put it on a server
-Docker + automatic HTTPS + daily checked backups: see **[docs/deploy.md](docs/deploy.md)**.
+Docker + PostgreSQL + automatic HTTPS + daily checked backups: see **[docs/deploy.md](docs/deploy.md)**.
 ```bash
-cd deploy && cp .env.example .env   # set DOMAIN etc.
+cd deploy && cp .env.example .env   # set DOMAIN, POSTGRES_PASSWORD etc.
 docker compose up -d --build
 docker compose exec api npm run create-admin -- you@example.org "Your Name"
 ```
