@@ -66,10 +66,11 @@ export function getPestReport(db, id) {
   return parse(db.prepare("SELECT * FROM pest_reports WHERE id = ?").get(id));
 }
 
-export function listPestReports(db, { county, status, limit = 100 } = {}) {
+export function listPestReports(db, { county, counties, status, limit = 100 } = {}) {
   const where = [];
   const args = [];
-  if (county) { where.push("county = ?"); args.push(county); }
+  const list = counties ?? (county ? [county] : null); // counties = an officer's area
+  if (list) { where.push(`county IN (${list.map(() => "?").join(",") || "NULL"})`); args.push(...list); }
   if (status) { where.push("status = ?"); args.push(status); }
   const sql = `SELECT * FROM pest_reports ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY id DESC LIMIT ?`;
   return db.prepare(sql).all(...args, limit).map(parse);

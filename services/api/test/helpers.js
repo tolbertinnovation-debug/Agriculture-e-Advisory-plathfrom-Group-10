@@ -9,9 +9,9 @@ export const CONTENT_DIR = resolve(here, "../../../content");
 export const content = loadContent(CONTENT_DIR);
 
 /** Start the API on a random port with an empty in-memory database. */
-export async function startTestServer({ now, officerToken = "" } = {}) {
+export async function startTestServer({ now, staffAuth = false } = {}) {
   const db = openDb(":memory:");
-  const app = createApp({ db, content, now, officerToken, webhookSecret: "" });
+  const app = createApp({ db, content, now, staffAuth, webhookSecret: "" });
   const server = await new Promise((ok) => {
     const s = app.listen(0, () => ok(s));
   });

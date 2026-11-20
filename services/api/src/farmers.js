@@ -77,9 +77,11 @@ export function getFarmerByPhone(db, phone) {
   return p ? withCrops(db, db.prepare("SELECT * FROM farmers WHERE phone = ?").get(p)) : null;
 }
 
-export function listFarmers(db, { county, limit = 100, offset = 0 } = {}) {
-  const rows = county
-    ? db.prepare("SELECT * FROM farmers WHERE county = ? ORDER BY id DESC LIMIT ? OFFSET ?").all(county, limit, offset)
+/** counties: limit to these counties (an officer's area); undefined = all. */
+export function listFarmers(db, { county, counties, limit = 100, offset = 0 } = {}) {
+  const list = counties ?? (county ? [county] : null);
+  const rows = list
+    ? db.prepare(`SELECT * FROM farmers WHERE county IN (${list.map(() => "?").join(",") || "NULL"}) ORDER BY id DESC LIMIT ? OFFSET ?`).all(...list, limit, offset)
     : db.prepare("SELECT * FROM farmers ORDER BY id DESC LIMIT ? OFFSET ?").all(limit, offset);
   return rows.map((r) => withCrops(db, r));
 }

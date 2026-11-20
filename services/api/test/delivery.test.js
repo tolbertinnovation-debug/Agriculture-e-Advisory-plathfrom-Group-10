@@ -191,7 +191,7 @@ test("over HTTP: run the advice job, see job status, receive delivery reports", 
 
 test("with WEBHOOK_SECRET set, gateway webhooks need the secret", async () => {
   const { createApp } = await import("../src/app.js");
-  const app = createApp({ db: openDb(":memory:"), content, webhookSecret: "gw-secret", officerToken: "" });
+  const app = createApp({ db: openDb(":memory:"), content, webhookSecret: "gw-secret", staffAuth: false });
   const server = await new Promise((ok) => { const s = app.listen(0, () => ok(s)); });
   const base = `http://127.0.0.1:${server.address().port}`;
   try {

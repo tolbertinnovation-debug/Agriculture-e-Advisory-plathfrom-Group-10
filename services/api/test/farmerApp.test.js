@@ -10,7 +10,7 @@ const PHONE = "0777 123 999";
 async function start({ providerName = "log" } = {}) {
   db = openDb(":memory:");
   clock = new Date("2026-06-05T08:00:00Z");
-  const app = createApp({ db, content, now: () => clock, officerToken: "officer-secret", webhookSecret: "", providerName });
+  const app = createApp({ db, content, now: () => clock, staffAuth: false, webhookSecret: "", providerName });
   server = await new Promise((ok) => { const s = app.listen(0, () => ok(s)); });
   base = `http://127.0.0.1:${server.address().port}`;
 }

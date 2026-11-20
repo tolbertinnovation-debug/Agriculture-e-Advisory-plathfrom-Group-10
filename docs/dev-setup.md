@@ -13,13 +13,35 @@ npm install
 ```bash
 npm test
 ```
-You should see `# pass 99` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
+You should see `# pass 114` and `# fail 0`. The tests also run automatically on GitHub every time someone pushes.
 
 ## 3. Add demo data and start the API
 ```bash
-npm run seed     # demo farmers, pest reports (a Nimba hotspot), questions, market reporters, 2 weeks of sample prices, a sample forecast
+npm run seed     # demo farmers, pest reports (a Nimba hotspot), questions, market reporters, 2 weeks of sample prices, a sample forecast, demo staff logins
 npm run dev      # starts on http://localhost:3000 and restarts when you save a file
 ```
+
+### Staff logins (officer dashboard)
+Everyone who uses the dashboard has their own account. `npm run seed` creates these **local demo** logins (never use them on a real server):
+
+| Role | Email | Password | Can |
+|---|---|---|---|
+| admin | admin@agriconnect.test | demo-admin-2026 | everything, incl. staff accounts and the audit log |
+| officer | mulbah@agriconnect.test | demo-officer-2026 | reports, questions, hotspots and advisories for **Bong, Lofa, Nimba only** |
+| editor | editor@agriconnect.test | demo-editor-2026 | market prices, reporters, weather refresh, advice job |
+| viewer | partner@agriconnect.test | demo-viewer-2026 | numbers and hotspots only, no personal data |
+
+**Staff & security page** (`/prototype/staff.html`, linked from the dashboard):
+- **Everyone** can change their password and turn on **2-step login**: a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy) on top of the password.
+- **Admins** create accounts (the first password is shown once), change roles and counties, reset passwords, switch accounts off (which logs them out at once), and read the **audit log** of who did what.
+
+Security rules: passwords are hashed with scrypt; 5 wrong tries lock an account for 15 minutes; sessions end after 12 hours; officers can only see and message farmers in their own counties.
+
+**On a real server**, create the first admin with
+```bash
+npm run create-admin -- you@example.org "Your Name"
+```
+The password is printed once. Log in, change it and turn on 2-step login. Set `REQUIRE_2FA=1` so every staff member must use it.
 
 ## 4. Try the basic-phone experience (USSD + SMS)
 With the API running, open **http://localhost:3000/prototype/ussd.html**. The badge should say **LIVE**.
@@ -66,7 +88,9 @@ SMS_PROVIDER=africastalking AT_USERNAME=sandbox AT_API_KEY=your-key AT_SANDBOX=1
 **Never put keys in the code or commit them to GitHub.** Use environment variables or your hosting platform's "secrets" settings.
 
 ### Checklist before real farmers use it
-- [ ] `OFFICER_TOKEN` set (dashboard access code)
+- [ ] First admin created with `npm run create-admin`, and **no** demo accounts (never run `npm run seed` on the server)
+- [ ] `REQUIRE_2FA=1` set, so every staff member uses 2-step login
+- [ ] `STAFF_AUTH` **not** set to `off`
 - [ ] `WEBHOOK_SECRET` set, and the gateway URLs end in `?secret=<WEBHOOK_SECRET>`: `/ussd`, `/sms/inbound`, `/sms/status`
 - [ ] SMS provider tested with the team's own phones on each network (Lonestar Cell MTN and Orange)
 - [ ] All content reviewed by an agronomist (`"status": "draft"` → `"approved"`)
@@ -159,7 +183,7 @@ prototype/            clickable demo screens for the pitch (no server needed)
 
 ## API (steps 1–6)
 
-Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
+Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POST /api/staff/login`) and a role that allows them. For officers, lists and actions are limited to their own counties.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -177,7 +201,7 @@ Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 | GET 🔒 | `/api/stats` | Numbers for the dashboard |
 | POST | `/ussd` | USSD gateway webhook (`phoneNumber`, `text`) → `CON …` / `END …` |
 | POST | `/sms/inbound` | Incoming SMS (`from`, `text`): HELP, ASK, STOP, START |
-| GET 🔒 | `/api/messages?phone=` | SMS sent and received (the simulator's inbox) |
+| GET 🔒 | `/api/messages?phone=` | SMS log (admin only; one phone's inbox is open in development for the simulator) |
 | GET 🔒 | `/api/questions?county=&status=` | Questions and call-back requests for officers |
 | PATCH 🔒 | `/api/pest-reports/:id` | `{status: verified\|rejected\|closed, confirmed_pest}`; verifying SMSes the farmer |
 | PATCH 🔒 | `/api/questions/:id` | `{answer, answered_by}`; the answer goes to the farmer by SMS (max 139 chars) |
@@ -195,6 +219,15 @@ Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 | GET 🔒 | `/api/prices/flagged` | Unusual prices waiting for a check |
 | PATCH 🔒 | `/api/prices/:id` | `{status: ok \| rejected}` |
 | GET / POST 🔒 | `/api/reporters` | List / add market reporters `{phone, name, market}` |
+| POST | `/api/staff/login` | `{email, password, code?}` → `{token, staff}` (`needs_code` when 2-step login is on) |
+| POST 🔒 | `/api/staff/logout` | End this session |
+| GET 🔒 | `/api/staff/me` | Who am I, role, counties, permissions |
+| POST 🔒 | `/api/staff/me/password` | `{current, new}` |
+| POST 🔒 | `/api/staff/me/2fa/start` · `/enable` · `/disable` | Set up 2-step login (`enable` takes `{code}`, `disable` takes `{password}`) |
+| GET / POST 🔒 | `/api/staff` | Admin: list / create staff `{email, name, role, counties}` (the password is returned once) |
+| PATCH 🔒 | `/api/staff/:id` | Admin: `{name, role, counties, active}` |
+| POST 🔒 | `/api/staff/:id/reset-password` | Admin: new one-time password (`{reset_2fa: true}` also resets 2-step login) |
+| GET 🔒 | `/api/audit` | Admin: audit log |
 | POST 🔒 | `/api/jobs/weather/run` | Fetch all county forecasts now (and send due rain alerts) |
 | POST | `/api/auth/request-code` | `{phone}` → SMS with a 6-digit code (`dev_code` in the answer only when `SMS_PROVIDER=log`) |
 | POST | `/api/auth/verify` | `{phone, code}` → `{token, registered}` |
@@ -220,7 +253,9 @@ Routes marked 🔒 are officer-only (see `OFFICER_TOKEN` below).
 | `WEATHER` | *(on)* | `off` = don't fetch forecasts |
 | `WEATHER_URL` | Open-Meteo | Another server with the same format (used for testing) |
 | `WEBHOOK_SECRET` | *(unset)* | When set, `/ussd`, `/sms/inbound` and `/sms/status` need `?secret=…` or header `X-Webhook-Secret` |
-| `OFFICER_TOKEN` | *(unset)* | Access code for 🔒 officer routes. Unset = open (fine on your laptop). **Always set it on a server others can reach**; the dashboard then asks for it. Real staff accounts come in MVP Sprint 1. |
+| `REQUIRE_2FA` | *(off)* | `1` = every staff member must set up 2-step login before using the dashboard. **Set it on a real server.** |
+| `STAFF_AUTH` | *(on)* | `off` = the dashboard needs no login (quick local demo only; never on a shared server) |
+| ~~`OFFICER_TOKEN`~~ | | Removed: replaced by personal staff accounts |
 
 ## USSD menu (live)
 ```

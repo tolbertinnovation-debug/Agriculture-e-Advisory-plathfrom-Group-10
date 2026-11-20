@@ -12,11 +12,12 @@ export function levelFor(reports) {
   return "Watch";
 }
 
-export function listHotspots(db, content, { days = HOTSPOT_DAYS, min = HOTSPOT_MIN_REPORTS, county } = {}) {
+export function listHotspots(db, content, { days = HOTSPOT_DAYS, min = HOTSPOT_MIN_REPORTS, county, counties } = {}) {
   const names = Object.fromEntries(content.pests.map((p) => [p.id, p.name]));
   const args = [`-${days} days`];
   let countyFilter = "";
-  if (county) { countyFilter = "AND county = ?"; args.push(county); }
+  const list = counties ?? (county ? [county] : null); // counties = an officer's area
+  if (list) { countyFilter = `AND county IN (${list.map(() => "?").join(",") || "NULL"})`; args.push(...list); }
   args.push(min);
   const rows = db
     .prepare(

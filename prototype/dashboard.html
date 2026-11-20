@@ -56,6 +56,10 @@
   #toast { position: fixed; bottom: 24px; right: 24px; background: var(--forest); color: #fff; padding: 14px 18px; border-radius: 12px; font-weight: 700; display: none; max-width: 420px; z-index: 5; }
   #toast.bad { background: var(--red); }
   #login { display: none; }
+  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+  .field input { font: inherit; font-weight: 400; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+  .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .hide { display: none !important; }
   @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } aside.nav { display: none; } .kpis { grid-template-columns: 1fr 1fr; } .row { grid-template-columns: 1fr; } main { padding: 16px; } }
 </style>
 </head>
@@ -70,19 +74,22 @@
     <a href="#reports">🐛 Pest reports</a>
     <a href="#questions">💬 Farmer questions</a>
     <a href="#advisory">📣 Send advisory</a>
+    <a href="staff.html">🔐 Staff &amp; security</a>
     <a href="ussd.html">📱 USSD simulator</a>
   </aside>
   <main>
     <div class="top" id="overview">
-      <div><div class="eyebrow">Extension Officer Portal · Ministry of Agriculture</div><h1>Good morning, Officer Mulbah</h1></div>
-      <span class="mode" id="mode">…</span>
+      <div><div class="eyebrow">Extension Officer Portal · Ministry of Agriculture</div><h1 id="hello">Good morning, Officer Mulbah</h1></div>
+      <div class="who"><span class="mode" id="mode">…</span><span class="tag hide" id="who"></span><button class="act ghost hide" id="signout">Sign out</button></div>
     </div>
 
     <div class="card" id="login">
-      <h3>Officer login</h3>
-      <p class="muted">This server is protected. Enter the officer access code.</p>
-      <div class="answer"><input type="text" id="token" placeholder="Access code" autocomplete="off"><button class="act" onclick="saveToken()">Log in</button></div>
+      <h3>Staff login</h3>
+      <p class="muted">Use your own AgriConnect account. Ask your admin if you don't have one.</p>
+      <div id="loginForm"></div>
     </div>
+
+    <div id="dashBody" style="display:contents">
 
     <div class="kpis" id="kpis"></div>
 
@@ -131,11 +138,13 @@
         <div class="sent-list" id="sentList"></div>
       </div>
     </div>
+    </div>
     <p class="muted" id="footnote"></p>
   </main>
 </div>
 <div id="toast"></div>
 <script src="data.js"></script>
+<script src="staff-auth.js"></script>
 <script>
 // ---------------------------------------------------------------------------
 // LIVE when served by the AgriConnect API (http://localhost:3000/prototype/dashboard.html)
@@ -163,18 +172,46 @@ function toast(text, bad = false) {
   clearTimeout(toast.timer); toast.timer = setTimeout(() => (t.style.display = "none"), 3500);
 }
 
+// ---------------- staff login & roles ----------------
+let me = null; // the signed-in staff member: { name, role, counties, permissions }
+const has = (perm) => !live || !!me?.permissions?.includes(perm); // demo mode shows everything
+const show = (sel, yes) => document.querySelectorAll(sel).forEach((el) => el.classList.toggle("hide", !yes));
+
 async function api(method, path, body) {
-  const headers = {};
-  if (body) headers["Content-Type"] = "application/json";
-  const token = load("officerToken");
-  if (token) headers.Authorization = "Bearer " + token;
-  const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  if (res.status === 401) { $("#login").style.display = "block"; throw new Error("Officer login required"); }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.details ? data.details.join("; ") : data.error || "Request failed");
-  return data;
+  try {
+    return await StaffAuth.api(API, method, path, body);
+  } catch (e) {
+    if (e.login) showLogin();
+    throw e;
+  }
 }
-function saveToken() { store("officerToken", $("#token").value.trim()); $("#login").style.display = "none"; refresh(); }
+
+function showLogin() {
+  me = null;
+  $("#login").style.display = "block";
+  $("#dashBody").style.display = "none";
+  show("#who, #signout", false);
+  StaffAuth.loginForm($("#loginForm"), API, () => start());
+}
+
+function applyRole() {
+  $("#login").style.display = "none";
+  $("#dashBody").style.display = "contents";
+  $("#hello").textContent = `Good morning, ${me.name}`;
+  $("#who").textContent = `${me.role}${me.counties.length ? " · " + me.counties.join(", ") : " · all counties"}${me.two_factor ? " · 2-step ✓" : ""}`;
+  show("#who, #signout", true);
+  show("#reports", has("reports:read"));
+  show("#questions", has("questions:read"));
+  show("#advisory", has("broadcasts:send"));
+  show("#jobs", has("jobs:read"));
+  show("#jobs .actions", has("jobs:run"));
+  show("#prices", has("prices:read"));
+  show("#prices details", has("reporters:write"));
+  show("#weather button", has("weather:run"));
+  // Officers can only message their own counties.
+  const counties = me.role === "officer" ? me.counties : COUNTIES;
+  $("#bCounty").innerHTML = `<option value="">${me.role === "officer" ? "All my counties" : "All counties"}</option>` + counties.map((c) => `<option>${esc(c)}</option>`).join("");
+}
 
 // ---------------- rendering (same for live and demo) ----------------
 function renderStats(s) {
@@ -199,7 +236,7 @@ function renderStats(s) {
 function renderHotspots(list) {
   $("#hotspotTable").innerHTML = list.length
     ? `<tr><th>Pest</th><th>County</th><th>Reports</th><th>Level</th><th></th></tr>` +
-      list.map((h, i) => `<tr><td>${esc(h.pest_name)}</td><td>${esc(h.county)}</td><td class="num">${h.reports}</td><td><span class="status l-${esc(h.level)}">${esc(h.level)}</span></td><td><button class="act warn" onclick="warnFarmers(${i})">Warn farmers</button></td></tr>`).join("")
+      list.map((h, i) => `<tr><td>${esc(h.pest_name)}</td><td>${esc(h.county)}</td><td class="num">${h.reports}</td><td><span class="status l-${esc(h.level)}">${esc(h.level)}</span></td><td>${has("broadcasts:send") ? `<button class="act warn" onclick="warnFarmers(${i})">Warn farmers</button>` : ""}</td></tr>`).join("")
     : '<tr><td class="empty">No hotspots. When 3 farmers in one county report the same pest within 7 days, it shows here.</td></tr>';
   renderHotspots.list = list;
 }
@@ -256,7 +293,7 @@ async function answer(id, called = false) {
   const text = called ? "" : input.value.trim();
   if (!called && !text) return toast("Write a reply first.", true);
   try {
-    const r = await api("PATCH", `/api/questions/${id}`, { answer: text, answered_by: "Officer Mulbah" });
+    const r = await api("PATCH", `/api/questions/${id}`, { answer: text });
     if (input) input.blur();
     toast(r.notified ? "Reply sent to the farmer by SMS." : "Marked as called.");
     refresh();
@@ -295,7 +332,7 @@ async function broadcast() {
   if (!confirm(`Send this SMS to ${n(reach)} farmers?`)) return;
   $("#bSend").disabled = true;
   try {
-    const b = await api("POST", "/api/broadcasts", { ...target(), channels: ["sms"], message: $("#bMsg").value, sent_by: "Officer Mulbah" });
+    const b = await api("POST", "/api/broadcasts", { ...target(), channels: ["sms"], message: $("#bMsg").value });
     toast(`✅ Queued for ${n(b.queued)} farmers. They go out within seconds.`);
     refresh();
   } catch (e) { toast(e.message, true); }
@@ -349,7 +386,7 @@ function renderPrices(all = priceData, flagged = flaggedData, reporters = report
       list.items.map((it) => `<tr><td>${esc(it.name)} <span class="muted">/${esc(it.unit)}</span></td><td class="num">${n(it.price_lrd)}</td><td class="num">${it.change_pct == null ? "–" : (it.change_pct > 0 ? "+" : "") + it.change_pct + "%"}</td><td>${ago(it.reported_at.replace("T", " ").slice(0, 19))} ago</td></tr>`).join("")
     : '<tr><td class="empty">No prices this week for this market.</td></tr>';
   $("#flagged").innerHTML = flagged?.length
-    ? `<p style="margin:10px 0 4px"><b>⚠ Unusual prices to check</b></p>` + flagged.map((p) => `<div class="answer" style="align-items:center"><span style="flex:1;font-size:13.5px">${esc(p.item_name)} at ${esc(p.market_name)}: <b>${n(p.price_lrd)} LRD</b> <span class="muted">(${esc(p.reporter ?? "")})</span></span><button class="act" onclick="setPrice(${p.id},'ok')">Accept</button><button class="act ghost" onclick="setPrice(${p.id},'rejected')">Reject</button></div>`).join("")
+    ? `<p style="margin:10px 0 4px"><b>⚠ Unusual prices to check</b></p>` + flagged.map((p) => `<div class="answer" style="align-items:center"><span style="flex:1;font-size:13.5px">${esc(p.item_name)} at ${esc(p.market_name)}: <b>${n(p.price_lrd)} LRD</b> <span class="muted">(${esc(p.reporter ?? "")})</span></span>${has("prices:write") ? `<button class="act" onclick="setPrice(${p.id},'ok')">Accept</button><button class="act ghost" onclick="setPrice(${p.id},'rejected')">Reject</button>` : ""}</div>`).join("")
     : "";
   if (reporters) $("#repCount").textContent = reporters.length;
 }
@@ -380,15 +417,21 @@ async function addReporterForm() {
 async function refresh() {
   if (!live) return;
   try {
+    // Only ask for what this role may see.
+    const get = (perm, path) => (has(perm) ? api("GET", path) : Promise.resolve(null));
     const [stats, hotspots, reports, questions, broadcasts, jobs, weather, prices, flagged, reporters] = await Promise.all([
-      api("GET", "/api/stats"), api("GET", "/api/hotspots"), api("GET", "/api/pest-reports?limit=25"),
-      api("GET", "/api/questions?limit=25"), api("GET", "/api/broadcasts"), api("GET", "/api/jobs"),
-      api("GET", "/api/weather"), api("GET", "/api/prices"), api("GET", "/api/prices/flagged"), api("GET", "/api/reporters")
+      get("stats:read", "/api/stats"), get("hotspots:read", "/api/hotspots"), get("reports:read", "/api/pest-reports?limit=25"),
+      get("questions:read", "/api/questions?limit=25"), get("broadcasts:read", "/api/broadcasts"), get("jobs:read", "/api/jobs"),
+      api("GET", "/api/weather"), api("GET", "/api/prices"), get("prices:read", "/api/prices/flagged"), get("prices:read", "/api/reporters")
     ]);
-    renderWeather(weather); renderPrices(prices, flagged, reporters);
-    $("#login").style.display = "none";
-    renderStats(stats); renderHotspots(hotspots); renderReports(reports); renderQuestions(questions); renderBroadcasts(broadcasts); renderJobs(jobs);
-  } catch (e) { if (e.message !== "Officer login required") console.error(e); }
+    renderWeather(weather); renderPrices(prices, flagged ?? [], reporters ?? []);
+    if (stats) renderStats(stats);
+    if (hotspots) renderHotspots(hotspots);
+    if (reports) renderReports(reports);
+    if (questions) renderQuestions(questions);
+    if (broadcasts) renderBroadcasts(broadcasts);
+    if (jobs) renderJobs(jobs);
+  } catch (e) { if (!e.login) console.error(e); }
 }
 
 function demo() {
@@ -413,21 +456,32 @@ function demo() {
   $("#jobInfo").innerHTML = "Crop-stage advice goes out <b>every day at 07:00</b>. SMS provider: sample data.";
 }
 
+let started = false;
+async function start() {
+  try { me = await api("GET", "/api/staff/me"); } catch { return; } // shows the login form
+  applyRole();
+  if (started) return refresh();
+  started = true;
+  try {
+    const [crops, pests] = await Promise.all([api("GET", "/api/content/crops"), api("GET", "/api/content/pests")]);
+    names.crops = Object.fromEntries(crops.map((c) => [c.id, c.name]));
+    names.pests = Object.fromEntries(pests.pests.map((p) => [p.id, p.name]));
+    $("#bCrop").innerHTML = '<option value="">All crops</option>' + crops.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+  } catch {}
+  await refresh();
+  updatePreview();
+  setInterval(() => me && refresh(), 5000);
+}
+
 (async () => {
   $("#bCounty").innerHTML += COUNTIES.map((c) => `<option>${esc(c)}</option>`).join("");
   if (API) { try { live = (await fetch(API + "/health")).ok; } catch {} }
+  $("#signout").onclick = async () => { await StaffAuth.logout(API); showLogin(); };
   $("#mode").className = "mode " + (live ? "live" : "demo");
   $("#mode").textContent = live ? "● LIVE data" : "● DEMO: sample data (start the API for live data)";
   $("#footnote").textContent = live ? "Live data from the AgriConnect API. Updates every 5 seconds." : "Prototype: all numbers are sample data.";
   if (live) {
-    try {
-      const [crops, pests] = await Promise.all([api("GET", "/api/content/crops"), api("GET", "/api/content/pests")]);
-      names.crops = Object.fromEntries(crops.map((c) => [c.id, c.name]));
-      names.pests = Object.fromEntries(pests.pests.map((p) => [p.id, p.name]));
-      $("#bCrop").innerHTML += crops.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
-    } catch {}
-    await refresh();
-    setInterval(refresh, 5000);
+    await start();
   } else {
     $("#bCrop").innerHTML += Object.keys(CROP_GUIDES).map((c) => `<option>${esc(c)}</option>`).join("");
     demo();

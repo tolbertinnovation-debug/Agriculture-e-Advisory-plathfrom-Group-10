@@ -44,5 +44,8 @@ app.listen(PORT, () => {
   console.log(`Weather: ${process.env.WEATHER === "off" ? "OFF" : `Open-Meteo forecasts every 3 hours${process.env.WEATHER_URL ? ` (from ${process.env.WEATHER_URL})` : ""}`}`);
   console.log(`Daily crop advice: ${process.env.SCHEDULER === "off" ? "OFF" : `every day at ${String(ADVICE_HOUR).padStart(2, "0")}:00 Liberia time`}`);
   if (!process.env.WEBHOOK_SECRET && provider.name !== "log") console.warn("WEBHOOK_SECRET is not set: anyone could call /ussd and /sms/inbound. Set it before going live.");
-  if (!process.env.OFFICER_TOKEN) console.warn("OFFICER_TOKEN is not set: officer pages are open. Fine on your laptop, never on a shared server.");
+  if (process.env.STAFF_AUTH === "off") console.warn("STAFF_AUTH=off: the officer dashboard needs NO login. Only for a quick local demo, never on a shared server.");
+  else if (!db.prepare("SELECT 1 FROM staff WHERE role = 'admin' AND active = 1").get())
+    console.warn("No admin account yet. Create one: npm run create-admin -- you@example.org \"Your Name\"  (or npm run seed for local demo accounts)");
+  if (process.env.REQUIRE_2FA !== "1") console.warn("REQUIRE_2FA is not set: staff may log in with a password only. Set REQUIRE_2FA=1 on a real server.");
 });

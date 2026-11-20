@@ -155,6 +155,40 @@ CREATE TABLE IF NOT EXISTS prices (
   reported_at TEXT NOT NULL                        -- ISO time from the engine's clock
 );
 
+-- Staff (officer dashboard) accounts, sessions and the audit log.
+CREATE TABLE IF NOT EXISTS staff (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  email           TEXT NOT NULL UNIQUE,
+  name            TEXT NOT NULL,
+  role            TEXT NOT NULL,                   -- admin | officer | editor | viewer
+  counties        TEXT NOT NULL DEFAULT '[]',      -- JSON: counties an officer works in
+  password_hash   TEXT NOT NULL,
+  totp_secret     TEXT,                            -- 2-step login (authenticator app)
+  totp_enabled    INTEGER NOT NULL DEFAULT 0,
+  totp_last_step  INTEGER,                         -- stops the same code being used twice
+  failed_logins   INTEGER NOT NULL DEFAULT 0,
+  locked_until    TEXT,
+  active          INTEGER NOT NULL DEFAULT 1,
+  last_login_at   TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS staff_sessions (
+  token_hash  TEXT PRIMARY KEY,
+  staff_id    INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+  mfa_ok      INTEGER NOT NULL DEFAULT 1,          -- 0 = must set up 2-step login before doing anything else
+  expires_at  TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS audit_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  staff_id    INTEGER,
+  staff_email TEXT,
+  action      TEXT NOT NULL,                       -- e.g. login, broadcast.send, report.verified, staff.create
+  target      TEXT,
+  detail      TEXT,                                -- JSON
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_prices ON prices(market, item, reported_at);
 CREATE INDEX IF NOT EXISTS idx_weather_alerts ON weather_alerts(county, sent_at);
 CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_codes(phone, created_at);

@@ -111,18 +111,3 @@ test("stats include hotspots and reports waiting for an officer", async () => {
   assert.equal(body.counties_flagged, 1);
   assert.equal(body.reports_to_check, 3);
 });
-
-test("with OFFICER_TOKEN set, officer routes need the token; farmer routes stay open", async () => {
-  const secure = await startTestServer({ officerToken: "s3cret" });
-  try {
-    assert.equal((await secure.call("GET", "/api/stats")).status, 401);
-    assert.equal((await secure.call("GET", "/api/stats", null, { Authorization: "Bearer wrong" })).status, 401);
-    assert.equal((await secure.call("GET", "/api/stats", null, { Authorization: "Bearer s3cret" })).status, 200);
-    assert.equal((await secure.call("POST", "/api/broadcasts", { message: "hi" })).status, 401);
-    assert.equal((await secure.call("GET", "/api/counties")).status, 200);
-    assert.equal((await secure.call("POST", "/api/pest-reports", { phone: "0880000001", county: "Bong", symptoms: ["rot"] })).status, 401);
-    assert.equal((await secure.call("POST", "/api/auth/request-code", { phone: "0880000001" })).status, 200);
-  } finally {
-    await secure.close();
-  }
-});

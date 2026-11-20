@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgriConnect — Staff &amp; security</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { background: var(--paper); }
+  main { max-width: 1100px; margin: 0 auto; padding: 26px 20px 60px; display: flex; flex-direction: column; gap: 18px; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .top h1 { margin: 0; font-size: 24px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+  .field input, .field select { font: inherit; font-weight: 400; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+  .act { border: 0; border-radius: 8px; font-weight: 800; font-size: 12.5px; padding: 7px 11px; cursor: pointer; background: var(--forest); color: #fff; }
+  .act.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--ink); }
+  .act.danger { background: var(--red-soft); color: var(--red); }
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .secret { font-family: "Courier New", monospace; font-size: 18px; font-weight: 700; letter-spacing: 2px; background: var(--leaf-soft); padding: 10px 12px; border-radius: 10px; word-break: break-all; }
+  .once { background: var(--gold-soft); border: 1px solid #E8D39A; border-radius: 10px; padding: 12px; font-size: 14px; }
+  .once code { font-size: 18px; font-weight: 800; }
+  .status { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+  .on { background: var(--leaf-soft); color: var(--forest); } .off { background: var(--red-soft); color: var(--red); } .grey { background: #ECEAE4; color: var(--muted); }
+  .counties { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 10px; font-size: 13px; }
+  .counties label { display: flex; gap: 6px; align-items: center; }
+  td .act { margin: 2px 0; }
+  .msg { font-weight: 700; margin: 0; }
+  .msg.bad { color: var(--red); } .msg.good { color: var(--forest); }
+  .hide { display: none !important; }
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--forest); color: #fff; padding: 14px 18px; border-radius: 12px; font-weight: 700; display: none; max-width: 420px; }
+  #toast.bad { background: var(--red); }
+  @media (max-width: 860px) { .row { grid-template-columns: 1fr; } .counties { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><div class="eyebrow">AgriConnect · Officer portal</div><h1>Staff &amp; security</h1></div>
+    <div style="display:flex;gap:8px;align-items:center"><a class="act ghost" href="dashboard.html" style="text-decoration:none">← Dashboard</a><button class="act ghost hide" id="signout">Sign out</button></div>
+  </div>
+
+  <div class="card hide" id="login"><h3>Staff login</h3><div id="loginForm"></div></div>
+
+  <div id="page" class="hide" style="display:contents">
+    <div class="row">
+      <div class="card stack" id="account">
+        <h3>My account</h3>
+        <div id="meInfo" class="muted"></div>
+        <h3 style="margin-top:8px">Change password</h3>
+        <form id="pwForm" class="stack">
+          <label class="field">Current password<input type="password" name="current" autocomplete="current-password" required></label>
+          <label class="field">New password (at least 10 characters)<input type="password" name="new" minlength="10" autocomplete="new-password" required></label>
+          <button class="act" style="align-self:flex-start">Change password</button>
+          <p class="msg" id="pwMsg"></p>
+        </form>
+      </div>
+
+      <div class="card stack" id="security">
+        <h3>2-step login</h3>
+        <p class="muted" style="margin:0">With 2-step login, a stolen password is not enough: you also need the 6-digit code from an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, Authy…).</p>
+        <div id="mfa"></div>
+      </div>
+    </div>
+
+    <div class="card stack hide" id="staffAdmin">
+      <h3>Staff accounts</h3>
+      <div class="scroll"><table id="staffTable"></table></div>
+      <div id="oncebox"></div>
+      <h3 style="margin-top:10px">Add a staff member</h3>
+      <form id="addForm" class="stack">
+        <div class="row">
+          <label class="field">Name<input name="name" required maxlength="80"></label>
+          <label class="field">Email<input type="email" name="email" required></label>
+        </div>
+        <label class="field">Role
+          <select name="role">
+            <option value="officer">Officer: reports, questions and advisories for their counties</option>
+            <option value="editor">Editor: market prices, reporters, weather and advice jobs</option>
+            <option value="viewer">Viewer: numbers only (partners)</option>
+            <option value="admin">Admin: everything, including staff accounts</option>
+          </select>
+        </label>
+        <div class="field">Counties (officers only work in these)<div class="counties" id="countyBoxes"></div></div>
+        <button class="act" style="align-self:flex-start">Create account</button>
+        <p class="msg" id="addMsg"></p>
+      </form>
+    </div>
+
+    <div class="card hide" id="auditCard"><h3>Audit log <span class="muted">who did what, newest first</span></h3><div class="scroll"><table id="auditTable"></table></div></div>
+  </div>
+</main>
+<div id="toast"></div>
+<script src="staff-auth.js"></script>
+<script>
+const API = new URLSearchParams(location.search).get("api") || location.origin;
+const $ = (s) => document.querySelector(s);
+const esc = StaffAuth.esc;
+const COUNTIES = ["Bomi", "Bong", "Gbarpolu", "Grand Bassa", "Grand Cape Mount", "Grand Gedeh", "Grand Kru", "Lofa", "Margibi", "Maryland", "Montserrado", "Nimba", "River Cess", "River Gee", "Sinoe"];
+let me = null;
+
+function toast(text, bad = false) {
+  const t = $("#toast"); t.textContent = text; t.className = bad ? "bad" : ""; t.style.display = "block";
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => (t.style.display = "none"), 4000);
+}
+async function api(method, path, body) {
+  try { return await StaffAuth.api(API, method, path, body); }
+  catch (e) { if (e.login) showLogin(); throw e; }
+}
+function showLogin() {
+  $("#login").classList.remove("hide"); $("#page").classList.add("hide"); $("#signout").classList.add("hide");
+  StaffAuth.loginForm($("#loginForm"), API, () => start());
+}
+const when = (iso) => (iso ? iso.replace("T", " ").slice(0, 16) : "never");
+
+// ---------------- my account ----------------
+function renderMe() {
+  $("#meInfo").innerHTML = `<b>${esc(me.name)}</b> · ${esc(me.email)}<br>Role: <b>${esc(me.role)}</b>${me.counties.length ? ` · Counties: ${esc(me.counties.join(", "))}` : ""}`;
+  $("#mfa").innerHTML = me.two_factor
+    ? `<p><span class="status on">ON</span> Your account is protected with 2-step login.</p>
+       <form id="mfaOff" class="stack"><label class="field">Your password, to turn it off<input type="password" name="password" required></label><button class="act danger" style="align-self:flex-start">Turn off 2-step login</button></form>`
+    : `<p><span class="status off">OFF</span> ${me.mfa_ok === false ? "<b>This server requires 2-step login. Set it up to continue.</b>" : "Turn it on now: it takes 2 minutes."}</p>
+       <button class="act" id="mfaStart" style="align-self:flex-start">Set up 2-step login</button><div id="mfaSetup"></div>`;
+  const startBtn = $("#mfaStart");
+  if (startBtn) startBtn.onclick = async () => {
+    const r = await api("POST", "/api/staff/me/2fa/start", {});
+    $("#mfaSetup").innerHTML = `
+      <ol style="padding-left:18px;font-size:14px">
+        <li>Open your authenticator app and choose <b>Add account → Enter a setup key</b> (or open <a href="${esc(r.otpauth_url)}">this link</a> on your phone).</li>
+        <li>Account name: <b>AgriConnect</b>. Key (time-based):<div class="secret">${esc(r.secret.replace(/(.{4})/g, "$1 ").trim())}</div></li>
+        <li>Type the 6-digit code the app shows:</li>
+      </ol>
+      <form id="mfaOn" class="stack"><label class="field">Code<input name="code" inputmode="numeric" maxlength="6" required autocomplete="one-time-code"></label><button class="act" style="align-self:flex-start">Turn on</button><p class="msg" id="mfaMsg"></p></form>`;
+    $("#mfaOn").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api("POST", "/api/staff/me/2fa/enable", { code: new FormData(e.target).get("code") });
+        toast("2-step login is on. You will need a code each time you log in.");
+        start();
+      } catch (ex) { $("#mfaMsg").className = "msg bad"; $("#mfaMsg").textContent = ex.message; }
+    };
+  };
+  const off = $("#mfaOff");
+  if (off) off.onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api("POST", "/api/staff/me/2fa/disable", { password: new FormData(e.target).get("password") }); toast("2-step login is off."); start(); }
+    catch (ex) { toast(ex.message, true); }
+  };
+}
+
+$("#pwForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try {
+    await api("POST", "/api/staff/me/password", { current: fd.get("current"), new: fd.get("new") });
+    StaffAuth.set(null);
+    toast("Password changed. Please log in again.");
+    showLogin();
+  } catch (ex) { if (!ex.login) { $("#pwMsg").className = "msg bad"; $("#pwMsg").textContent = ex.message; } }
+};
+
+// ---------------- admin: staff ----------------
+function showOnce(label, email, password) {
+  $("#oncebox").innerHTML = `<div class="once">${esc(label)} for <b>${esc(email)}</b>: <code>${esc(password)}</code><br>
+    Give it to them privately (not in a group chat). It is shown only now. They should change it after logging in and turn on 2-step login.</div>`;
+}
+
+async function renderStaff() {
+  const list = await api("GET", "/api/staff");
+  $("#staffTable").innerHTML = `<tr><th>Name</th><th>Role</th><th>Counties</th><th>2-step</th><th>Last login</th><th>Status</th><th></th></tr>` +
+    list.map((s) => `<tr>
+      <td><b>${esc(s.name)}</b><div class="muted">${esc(s.email)}</div></td>
+      <td><select data-role="${s.id}" ${s.id === me.id ? "disabled" : ""}>${["admin", "officer", "editor", "viewer"].map((r) => `<option ${r === s.role ? "selected" : ""}>${r}</option>`).join("")}</select></td>
+      <td>${s.role === "officer" ? `<input data-counties="${s.id}" value="${esc(s.counties.join(", "))}" style="width:170px">` : '<span class="muted">all</span>'}</td>
+      <td><span class="status ${s.two_factor ? "on" : "grey"}">${s.two_factor ? "ON" : "off"}</span></td>
+      <td>${esc(when(s.last_login_at))}</td>
+      <td><span class="status ${s.active ? "on" : "off"}">${s.active ? "active" : "switched off"}</span></td>
+      <td>${s.id === me.id ? '<span class="muted">you</span>' : `
+        <button class="act ghost" data-save="${s.id}">Save</button>
+        <button class="act ghost" data-reset="${s.id}" data-email="${esc(s.email)}">Reset password</button>
+        <button class="act ${s.active ? "danger" : ""}" data-active="${s.id}" data-to="${s.active ? "0" : "1"}">${s.active ? "Switch off" : "Switch on"}</button>`}</td>
+    </tr>`).join("");
+}
+
+$("#staffTable").onclick = async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  try {
+    if (b.dataset.save) {
+      const id = b.dataset.save;
+      const role = document.querySelector(`[data-role="${id}"]`).value;
+      const box = document.querySelector(`[data-counties="${id}"]`);
+      const counties = box ? box.value.split(",").map((c) => c.trim()).filter(Boolean) : undefined;
+      await api("PATCH", `/api/staff/${id}`, { role, ...(counties ? { counties } : {}) });
+      toast("Saved.");
+    }
+    if (b.dataset.reset && confirm(`Reset the password for ${b.dataset.email}? Their 2-step login is also reset.`)) {
+      const r = await api("POST", `/api/staff/${b.dataset.reset}/reset-password`, { reset_2fa: true });
+      showOnce("New password", b.dataset.email, r.password);
+    }
+    if (b.dataset.active) {
+      await api("PATCH", `/api/staff/${b.dataset.active}`, { active: b.dataset.to === "1" });
+      toast(b.dataset.to === "1" ? "Account switched on." : "Account switched off and logged out everywhere.");
+    }
+    await renderStaff(); await renderAudit();
+  } catch (ex) { if (!ex.login) toast(ex.message, true); }
+};
+
+$("#countyBoxes").innerHTML = COUNTIES.map((c) => `<label><input type="checkbox" name="county" value="${c}"> ${c}</label>`).join("");
+$("#addForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try {
+    const r = await api("POST", "/api/staff", { name: fd.get("name"), email: fd.get("email"), role: fd.get("role"), counties: fd.getAll("county") });
+    showOnce("Account created. First password", r.staff.email, r.password);
+    e.target.reset(); $("#addMsg").textContent = "";
+    await renderStaff(); await renderAudit();
+  } catch (ex) { if (!ex.login) { $("#addMsg").className = "msg bad"; $("#addMsg").textContent = ex.message; } }
+};
+
+async function renderAudit() {
+  const list = await api("GET", "/api/audit?limit=60");
+  $("#auditTable").innerHTML = `<tr><th>When (UTC)</th><th>Who</th><th>What</th><th>On</th><th>Details</th></tr>` +
+    list.map((a) => `<tr><td>${esc(a.created_at.slice(0, 16))}</td><td>${esc(a.staff_email ?? "-")}</td><td><b>${esc(a.action)}</b></td><td>${esc(a.target ?? "")}</td><td class="muted" style="font-size:12.5px">${esc(a.detail ? JSON.stringify(a.detail).slice(0, 120) : "")}</td></tr>`).join("");
+}
+
+// ---------------- start ----------------
+async function start() {
+  try { me = await api("GET", "/api/staff/me"); } catch { return; }
+  $("#login").classList.add("hide"); $("#page").classList.remove("hide"); $("#signout").classList.remove("hide");
+  renderMe();
+  const admin = me.permissions.includes("staff:manage");
+  $("#staffAdmin").classList.toggle("hide", !admin);
+  $("#auditCard").classList.toggle("hide", !me.permissions.includes("audit:read"));
+  if (admin && me.mfa_ok !== false) { await renderStaff(); await renderAudit(); }
+  if (location.hash === "#security") $("#security").scrollIntoView();
+}
+$("#signout").onclick = async () => { await StaffAuth.logout(API); showLogin(); };
+start();
+</script>
+</body>
+</html>

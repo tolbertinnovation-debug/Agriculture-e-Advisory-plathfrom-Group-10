@@ -198,7 +198,7 @@ test("over HTTP: public weather & prices, officer price tools, weather refresh, 
 test("officer can refresh the weather now (uses the configured source)", async () => {
   const { createApp } = await import("../src/app.js");
   const db = openDb(":memory:");
-  const app = createApp({ db, content, now: () => clock, officerToken: "", webhookSecret: "", weatherFetch: fakeFetch(openMeteo()) });
+  const app = createApp({ db, content, now: () => clock, staffAuth: false, webhookSecret: "", weatherFetch: fakeFetch(openMeteo()) });
   const server = await new Promise((ok) => { const s = app.listen(0, () => ok(s)); });
   const base = `http://127.0.0.1:${server.address().port}`;
   try {

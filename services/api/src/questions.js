@@ -20,10 +20,11 @@ export function getQuestion(db, id) {
   return row ? { ...row } : null;
 }
 
-export function listQuestions(db, { county, status, limit = 100 } = {}) {
+export function listQuestions(db, { county, counties, status, limit = 100 } = {}) {
   const where = [];
   const args = [];
-  if (county) { where.push("county = ?"); args.push(county); }
+  const list = counties ?? (county ? [county] : null); // counties = an officer's area
+  if (list) { where.push(`county IN (${list.map(() => "?").join(",") || "NULL"})`); args.push(...list); }
   if (status) { where.push("status = ?"); args.push(status); }
   return db
     .prepare(`SELECT * FROM questions ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY id DESC LIMIT ?`)
