@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { COUNTIES, findCounty, normalizePhone } from "./geo.js";
 import { adviceForFarmer } from "./engine.js";
-import { cleanFarmerInput, createFarmer, getFarmer, getFarmerByPhone, listFarmers, countFarmersByCounty } from "./farmers.js";
+import { cleanFarmerInput, createFarmer, getFarmer, getFarmerByPhone, listFarmers, countFarmers, countFarmersByCounty, farmerHistory, updateFarmer, exportFarmersCsv, FARMER_STATUSES } from "./farmers.js";
 import { createPestReport, getPestReport, listPestReports, countPestReports, updatePestReport, STATUSES } from "./pestReports.js";
 import { listQuestions, countQuestions, answerQuestion, getQuestion, QUESTION_STATUSES } from "./questions.js";
 import { sqlDaysAgo, isUniqueViolation } from "./db.js";
@@ -19,9 +19,11 @@ import { farmerRoutes } from "./farmerApi.js";
 import { getForecast, COUNTY_POINTS } from "./weather.js";
 import { recordPrice, latestPrices, allLatestPrices, listFlaggedPrices, setPriceStatus, addReporter, listReporters } from "./prices.js";
 import { staffGuards, staffRoutes, scopeCounties, mustCover } from "./staffAuth.js";
-import { audit, can } from "./staff.js";
+import { audit, can, isAreaLimited, AccessError } from "./staff.js";
+import { createRegistration, listRegistrations, getRegistration, resendRegistration, cancelRegistration, mayManage } from "./registrations.js";
 import { securityHeaders, cors, rateLimit } from "./http.js";
 import { recordError, systemStatus, recentErrors, backupDatabase, listBackupFiles } from "./ops.js";
+import { signupFunnel, feedbackSummary, runFeedbackJob } from "./fieldTest.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROTOTYPE_DIR = resolve(HERE, "../../../prototype");
@@ -152,8 +154,60 @@ export function createApp({
     }
   });
 
+  // ---- Assisted sign-up: an officer or lead farmer registers a farmer, who confirms with YES ----
+  app.post("/api/registrations", ...need("registrations:create"), async (req, res) => {
+    const county = findCounty(req.body?.county);
+    if (county) mustCover(req, county);
+    const reg = await createRegistration(ctx, req.body ?? {}, req.staff);
+    await audit(db, req.staff, "registration.create", reg.phone, { county: reg.county });
+    res.status(201).json(reg);
+  });
+  app.get("/api/registrations", ...need("registrations:read"), async (req, res) => {
+    const status = ["waiting", "joined", "refused", "expired", "cancelled"].includes(req.query.status) ? req.query.status : undefined;
+    res.json(await listRegistrations(db, req.staff, { status, limit: intParam(req.query.limit, 100, 500) }));
+  });
+  const ownRegistration = async (req) => {
+    const reg = await getRegistration(db, Number(req.params.id));
+    if (reg && !mayManage(req.staff, reg)) throw new AccessError("This registration was made by someone else", 403);
+    return reg;
+  };
+  app.post("/api/registrations/:id/resend", ...need("registrations:create"), async (req, res) => {
+    if (!(await ownRegistration(req))) return res.status(404).json({ error: "Registration not found" });
+    res.json(await resendRegistration(ctx, Number(req.params.id)));
+  });
+  app.post("/api/registrations/:id/cancel", ...need("registrations:create"), async (req, res) => {
+    const reg = await ownRegistration(req);
+    if (!reg) return res.status(404).json({ error: "Registration not found" });
+    if (!(await cancelRegistration(db, reg.id))) return res.status(400).json({ error: "Only a waiting invitation can be cancelled" });
+    await audit(db, req.staff, "registration.cancel", reg.phone);
+    res.json({ ok: true });
+  });
+
+  // Search: ?q=<name, district or phone>&crop=rice&status=active|opted_out&county=Bong. The total is in X-Total-Count.
+  const farmerQuery = (req) => {
+    const crop = req.query.crop ? String(req.query.crop) : undefined;
+    if (crop && !content.crops.has(crop)) throw new AccessError(`Unknown crop "${crop}"`, 400);
+    const status = req.query.status ? String(req.query.status) : undefined;
+    if (status && !FARMER_STATUSES.includes(status)) throw new AccessError(`status must be one of ${FARMER_STATUSES.join(", ")}`, 400);
+    return { counties: scopeCounties(req, req.query.county), q: req.query.q ? String(req.query.q) : undefined, crop, status };
+  };
   app.get("/api/farmers", ...need("farmers:read"), async (req, res) => {
-    res.json(await listFarmers(db, { counties: scopeCounties(req, req.query.county), limit: intParam(req.query.limit, 100, 500), offset: intParam(req.query.offset, 0, 1e9) }));
+    const filter = farmerQuery(req);
+    const [list, total] = await Promise.all([
+      listFarmers(db, { ...filter, limit: intParam(req.query.limit, 100, 500), offset: intParam(req.query.offset, 0, 1e9) }),
+      countFarmers(db, filter)
+    ]);
+    res.set("X-Total-Count", String(total)).json(list);
+  });
+
+  // CSV list for the field-test log (opens in Excel or Google Sheets). Officers get their counties only.
+  app.get("/api/farmers/export.csv", ...need("farmers:export"), async (req, res) => {
+    const filter = farmerQuery(req);
+    const { csv, count } = await exportFarmersCsv(db, filter);
+    await audit(db, req.staff, "farmers.export", null, { count, ...Object.fromEntries(Object.entries(filter).filter(([, v]) => v !== undefined)) });
+    res.set("Content-Disposition", `attachment; filename="agriconnect-farmers-${now().toISOString().slice(0, 10)}.csv"`)
+      .set("Cache-Control", "no-store")
+      .type("text/csv; charset=utf-8").send(csv);
   });
 
   const farmerById = async (req) => {
@@ -165,6 +219,22 @@ export function createApp({
     const farmer = await farmerById(req);
     if (!farmer) return res.status(404).json({ error: "Farmer not found" });
     res.json(farmer);
+  });
+  // One farmer's full story: messages, pest reports, questions and sign-up, newest first.
+  app.get("/api/farmers/:id/history", ...need("farmers:read"), async (req, res) => {
+    const farmer = await farmerById(req);
+    if (!farmer) return res.status(404).json({ error: "Farmer not found" });
+    res.json(await farmerHistory(db, farmer, { limit: intParam(req.query.limit, 200, 1000) }));
+  });
+  // Correct a farmer's name, district, county, language or crops and planting months.
+  app.patch("/api/farmers/:id", ...need("farmers:edit"), async (req, res) => {
+    const farmer = await farmerById(req);
+    if (!farmer) return res.status(404).json({ error: "Farmer not found" });
+    const newCounty = req.body?.county !== undefined ? findCounty(req.body.county) : null;
+    if (newCounty) mustCover(req, newCounty); // an officer can't move a farmer out of their own area
+    const { farmer: updated, changes } = await updateFarmer(db, content, farmer, req.body ?? {});
+    if (Object.keys(changes).length) await audit(db, req.staff, "farmer.update", updated.phone, changes);
+    res.json({ ...updated, changes });
   });
   app.get("/api/farmers/:id/advice", ...need("farmers:read"), async (req, res) => {
     const farmer = await farmerById(req);
@@ -296,7 +366,7 @@ export function createApp({
   // ---- Broadcasts: one advisory to many farmers (officers: only their counties) ----
   const broadcastTarget = (req) => {
     const body = req.body ?? {};
-    if (req.staff.role !== "officer") return body;
+    if (!isAreaLimited(req.staff)) return body;
     const counties = (body.counties ?? []).length ? body.counties.map((c) => findCounty(c) ?? c) : req.staff.counties;
     for (const c of counties) mustCover(req, c);
     return { ...body, counties };
@@ -309,14 +379,14 @@ export function createApp({
   });
   app.get("/api/broadcasts", ...need("broadcasts:read"), async (req, res) => {
     const list = await listBroadcasts(db, { limit: intParam(req.query.limit, 20, 200) });
-    const mine = req.staff.role === "officer" ? req.staff.counties : null;
+    const mine = isAreaLimited(req.staff) ? req.staff.counties : null;
     res.json(mine ? list.filter((b) => !b.counties.length || b.counties.some((c) => mine.includes(c))) : list);
   });
 
   // ---- Stats for the dashboard (aggregate numbers only; hotspots limited to an officer's area) ----
   app.get("/api/stats", ...need("stats:read"), async (req, res) => {
     const one = async (sql, ...args) => (await db.get(sql, ...args)).n;
-    const area = req.staff.role === "officer" ? req.staff.counties : undefined;
+    const area = isAreaLimited(req.staff) ? req.staff.counties : undefined;
     const hotspots = await listHotspots(db, content, { counties: area });
     res.json({
       farmers: await one("SELECT COUNT(*) AS n FROM farmers WHERE opted_out_at IS NULL"),
@@ -334,6 +404,22 @@ export function createApp({
   });
 
   // ---- Admin: system status, errors, backups ----
+  // ---- Field-test measures (MVP exit criteria) ----
+  // USSD sign-up completion has no county (people give up before choosing one), so it covers everyone.
+  app.get("/api/field-test", ...need("stats:read"), async (req, res) => {
+    const days = intParam(req.query.days, 30, 365) || 30;
+    res.json({
+      days,
+      ussd_signup: await signupFunnel(db, { days, now: now() }),
+      did_it_help: await feedbackSummary(db, content, { days, now: now(), counties: scopeCounties(req, req.query.county) })
+    });
+  });
+  app.post("/api/jobs/feedback/run", ...need("jobs:run"), async (req, res) => {
+    const result = await runFeedbackJob(ctx, { dryRun: req.body?.dry_run === true });
+    if (!result.dry_run) await audit(db, req.staff, "job.feedback", null, result);
+    res.json(result);
+  });
+
   app.get("/api/admin/status", ...need("audit:read"), async (req, res) => {
     res.json({ ...(await systemStatus(db, { now: now(), backupDir, smsProvider: providerName })), recent_errors: await recentErrors(db, 10) });
   });

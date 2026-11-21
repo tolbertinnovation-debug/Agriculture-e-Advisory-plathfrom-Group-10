@@ -1,7 +1,7 @@
 // Staff login for the officer dashboard: middleware, county limits and the /api/staff routes.
 import { findCounty } from "./geo.js";
 import {
-  can, permissionsFor, AccessError, login, logout, sessionStaff, getStaff, listStaff, createStaff, updateStaff,
+  isAreaLimited, can, permissionsFor, AccessError, login, logout, sessionStaff, getStaff, listStaff, createStaff, updateStaff,
   setPassword, generatePassword, verifyPassword, start2fa, enable2fa, disable2fa, audit, listAudit
 } from "./staff.js";
 
@@ -44,7 +44,7 @@ export function scopeCounties(req, requested) {
   const s = req.staff;
   const county = requested ? findCounty(requested) : null;
   if (requested && !county) throw new AccessError("Unknown county", 400);
-  if (s.role !== "officer") return county ? [county] : undefined;
+  if (!isAreaLimited(s)) return county ? [county] : undefined;
   if (county) {
     if (!s.counties.includes(county)) throw new AccessError(`You work in ${s.counties.join(", ")}, not ${county}`);
     return [county];
@@ -55,7 +55,7 @@ export function scopeCounties(req, requested) {
 /** Throws unless the staff member may act on something in this county. */
 export function mustCover(req, county) {
   const s = req.staff;
-  if (s.role === "officer" && !s.counties.includes(county)) throw new AccessError(`This belongs to ${county ?? "no county"}, outside your area (${s.counties.join(", ")})`);
+  if (isAreaLimited(s) && !s.counties.includes(county)) throw new AccessError(`This belongs to ${county ?? "no county"}, outside your area (${s.counties.join(", ")})`);
 }
 
 export function staffRoutes(app, ctx, guards, { require2fa = false } = {}) {

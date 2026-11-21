@@ -13,7 +13,7 @@ npm install
 ```bash
 npm test
 ```
-You should see `# pass 134` and `# fail 0`.
+You should see `# pass 143` and `# fail 0`.
 
 To run the same tests on PostgreSQL (what servers use), start one with Docker and point the tests at it:
 ```bash
@@ -37,6 +37,17 @@ Everyone who uses the dashboard has their own account. `npm run seed` creates th
 | officer | mulbah@agriconnect.test | demo-officer-2026 | reports, questions, hotspots and advisories for **Bong, Lofa, Nimba only** |
 | editor | editor@agriconnect.test | demo-editor-2026 | market prices, reporters, weather refresh, advice job |
 | viewer | partner@agriconnect.test | demo-viewer-2026 | numbers and hotspots only, no personal data |
+| lead | kerkula@agriconnect.test | demo-lead-2026 | lead farmer: registers farmers in **Bong only**; sees only their own invitations |
+
+**Assisted sign-up.** Officers and lead farmers register farmers on the dashboard (*Register a farmer*). The farmer gets an SMS and **joins only when they reply YES** (or answer the first `*347#` screen). NO, or no answer within 7 days, means nothing is kept. Invitations can be resent at most twice. Only admins can add farmers directly (`POST /api/farmers`, e.g. from signed paper forms).
+
+**Field-test measures** (dashboard card *Field test*, for the MVP exit criteria):
+- **Sign-up completion on `*347#`.** Every phone that starts registering is followed screen by screen. Finished ÷ (finished + cancelled + gave up) is the completion rate; the target is 80%. Someone silent for 10 minutes has given up, and the card shows at which screen (language, county, crop, planting month, consent). People dialling right now are not counted yet.
+- **"Did it help?"** Each day, with the advice job, farmers who reported a pest 3–10 days ago get one SMS: *Did our advice for Fall armyworm (PR-12) help? Reply 1 = Yes, 2 = No.* Only registered farmers who haven't said STOP, never about rejected reports, once per report and at most once a week per farmer. **2 (No) puts a call-back request in the officer's question queue**, so the farmer gets help. Answers are shown by pest, so the content team sees which advice works.
+
+**Farmers change their own crops** on `*347#` → 6 *My profile* → 2 *My crops & planting*: change a planting month, add a crop or remove one (they are asked to confirm first, and the last crop can't be removed). If a new crop stage is due, its advice is sent at once. The change appears in the farmer's history on the dashboard as "changed by the farmer on *347#".
+
+**Farmer management.** The dashboard's *Farmers* card searches by name, district or phone (type `0777 123` or `777123`), and filters by county, crop and STOP status. Click a farmer to see their whole history and to correct their name, district, county, language, crops and planting months; every change goes in the audit log with the old and new values. **Download CSV** gives the same list for the field-test log (Excel and Google Sheets open it; text that looks like a formula is made safe). Officers only find, change and export farmers in their own counties.
 
 **Staff & security page** (`/prototype/staff.html`, linked from the dashboard):
 - **Everyone** can change their password and turn on **2-step login**: a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy) on top of the password.
@@ -203,16 +214,20 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | GET | `/api/counties` | Liberia's 15 counties |
 | GET | `/api/content/crops` | Crop calendars |
 | GET | `/api/content/pests` | Symptom codes and pests |
-| POST 🔒 | `/api/farmers` | Assisted registration by an officer (needs `consent: true`) |
-| GET 🔒 | `/api/farmers?county=Bong` | List farmers |
+| POST 🔒 | `/api/farmers` | Admin only: add a farmer directly, e.g. from a signed paper form (needs `consent: true`) |
+| GET 🔒 | `/api/farmers?q=&county=&crop=&status=active\|opted_out&limit=&offset=` | Search farmers by name, district or phone digits; total in the `X-Total-Count` header |
+| GET 🔒 | `/api/farmers/export.csv?…same filters` | CSV for the field-test log: crops, SMS sent / delivered / failed, reports, questions, last contact (audited) |
 | GET 🔒 | `/api/farmers/:id` | One farmer |
+| GET 🔒 | `/api/farmers/:id/history` | Everything with one farmer, newest first: messages, pest reports, questions, invitation, joining, STOP |
+| PATCH 🔒 | `/api/farmers/:id` | Correct `name`, `district`, `county`, `language`, `crops` (not the phone, not STOP/START); audited with before and after |
 | GET 🔒 | `/api/farmers/:id/advice` | This week's advice for each crop |
 | POST 🔒 | `/api/pest-reports` | Report a pest for a farmer; returns diagnosis + reply SMS |
 | GET 🔒 | `/api/pest-reports?county=&status=` | List reports for officers |
 | GET 🔒 | `/api/pest-reports/:id` | One report |
 | GET 🔒 | `/api/stats` | Numbers for the dashboard |
+| GET 🔒 | `/api/field-test?days=30` | Field-test measures: `*347#` sign-up completion (target 80%) with where people stopped, and "Did it help?" answers by pest |
 | POST | `/ussd` | USSD gateway webhook (`phoneNumber`, `text`) → `CON …` / `END …` |
-| POST | `/sms/inbound` | Incoming SMS (`from`, `text`): HELP, ASK, STOP, START |
+| POST | `/sms/inbound` | Incoming SMS (`from`, `text`): HELP, ASK, STOP, START, 1 / 2 (answers to "Did it help?") |
 | GET 🔒 | `/api/messages?phone=` | SMS log (admin only; one phone's inbox is open in development for the simulator) |
 | GET 🔒 | `/api/questions?county=&status=` | Questions and call-back requests for officers |
 | PATCH 🔒 | `/api/pest-reports/:id` | `{status: verified\|rejected\|closed, confirmed_pest}`; verifying SMSes the farmer |
@@ -223,6 +238,7 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | GET 🔒 | `/api/broadcasts` | Advisories already sent |
 | GET 🔒 | `/api/jobs` | Daily advice schedule, last runs, SMS queue counts |
 | POST 🔒 | `/api/jobs/advice/run` | `{dry_run: true}` to preview, `{}` to send due advice now |
+| POST 🔒 | `/api/jobs/feedback/run` | Send the "Did it help?" SMS now (`{dry_run: true}` to preview); it also runs daily with the advice job |
 | POST | `/sms/status` | Delivery reports from the SMS provider: `{id, status}` |
 | GET | `/api/weather?county=Bong` | Forecast + farm advice for a county (all counties without `county`) |
 | GET | `/api/markets` | Markets and price items |
@@ -240,6 +256,9 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | PATCH 🔒 | `/api/staff/:id` | Admin: `{name, role, counties, active}` |
 | POST 🔒 | `/api/staff/:id/reset-password` | Admin: new one-time password (`{reset_2fa: true}` also resets 2-step login) |
 | GET 🔒 | `/api/audit` | Admin: audit log |
+| POST 🔒 | `/api/registrations` | Officer / lead: invite a farmer `{phone, name, county, district, language, crops}` |
+| GET 🔒 | `/api/registrations?status=` | Invitations (lead farmers: only their own; officers: their counties) |
+| POST 🔒 | `/api/registrations/:id/resend` · `/cancel` | Send the invitation again (max 3 in total) / cancel it |
 | GET 🔒 | `/api/admin/status` | Admin: backups, SMS, weather, advice, errors, warnings |
 | POST 🔒 | `/api/admin/backup` | Admin: back up now (needs `BACKUP_DIR`) |
 | GET | `/ready` | 200 only when the app and its database answer (for Docker and uptime monitors) |
@@ -289,7 +308,7 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
   → crop → planting month            3 Market prices → market → prices → 1 Get by SMS
   → consent → welcome SMS            4 Report pest → what you see → crop → SMS reply + Ref
 2 Report pest (asks county)          5 Ask an expert → call-back request / how to ASK by SMS
-3 Ask an expert (asks county)        6 My profile → change language / stop or start SMS
+3 Ask an expert (asks county)        6 My profile → language / my crops & planting / stop or start SMS
 ```
 Menu wording lives in `services/api/src/ussd.js`; the pest symptoms and crops shown in the USSD menus live in `content/pests.json` (`ussd_symptoms`, `report_crops`). Every screen is tested to fit in 182 characters.
 

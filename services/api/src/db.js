@@ -275,6 +275,62 @@ export const MIGRATIONS = [
       }
       await t.exec(INDEXES_V1);
     }
+  },
+  {
+    version: 2,
+    name: "assisted registrations waiting for the farmer's YES",
+    async up(t) {
+      await t.exec(fill(`
+CREATE TABLE IF NOT EXISTS registrations (
+  id             {{ID}},
+  phone          TEXT NOT NULL,
+  details        TEXT NOT NULL,                    -- JSON: name, county, district, language, crops
+  county         TEXT NOT NULL,
+  registered_by  INTEGER REFERENCES staff(id),     -- the officer or lead farmer
+  registrar_name TEXT,
+  status         TEXT NOT NULL DEFAULT 'waiting',  -- waiting | joined | refused | expired | cancelled
+  sms_sent       INTEGER NOT NULL DEFAULT 1,       -- how many invitations were sent (max 3)
+  farmer_id      INTEGER REFERENCES farmers(id),
+  created_at     TEXT NOT NULL,
+  expires_at     TEXT NOT NULL,
+  answered_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_registrations_phone ON registrations(phone, status);
+CREATE INDEX IF NOT EXISTS idx_registrations_county ON registrations(county, status);
+`, t.dialect));
+    }
+  },
+  {
+    version: 3,
+    name: "field-test measures: USSD sign-up funnel and 'Did it help?' answers",
+    async up(t) {
+      await t.exec(fill(`
+-- One row per phone that started registering on *347#: how far they got.
+CREATE TABLE IF NOT EXISTS ussd_signups (
+  id          {{ID}},
+  phone       TEXT NOT NULL UNIQUE,
+  last_step   TEXT NOT NULL,                       -- language | county | crop | month | consent | done
+  outcome     TEXT NOT NULL DEFAULT 'in_progress', -- in_progress | registered | cancelled
+  started_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ussd_signups_started ON ussd_signups(started_at);
+-- "Did the advice help? Reply 1 = Yes, 2 = No", sent a few days after a pest report.
+CREATE TABLE IF NOT EXISTS feedback_requests (
+  id          {{ID}},
+  report_id   INTEGER NOT NULL UNIQUE REFERENCES pest_reports(id),
+  farmer_id   INTEGER REFERENCES farmers(id),
+  phone       TEXT NOT NULL,
+  pest        TEXT,
+  county      TEXT,
+  message_id  INTEGER REFERENCES message_log(id),
+  answer      TEXT,                                -- yes | no (NULL = no answer yet)
+  asked_at    TEXT NOT NULL,
+  answered_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_phone ON feedback_requests(phone, asked_at);
+`, t.dialect));
+    }
   }
 ];
 
@@ -297,7 +353,7 @@ export async function migrate(db) {
 export const TABLES = [
   "farmers", "farmer_crops", "pest_reports", "questions", "broadcasts", "message_log", "advice_sends", "job_runs",
   "otp_codes", "farmer_sessions", "weather_forecasts", "weather_alerts", "market_reporters", "prices",
-  "staff", "staff_sessions", "audit_log", "backups", "error_log"
+  "staff", "staff_sessions", "audit_log", "backups", "error_log", "registrations", "ussd_signups", "feedback_requests"
 ];
 
 // ---------------------------------------------------------------- SQLite

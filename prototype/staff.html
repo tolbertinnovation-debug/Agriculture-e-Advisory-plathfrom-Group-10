@@ -83,10 +83,11 @@
             <option value="officer">Officer: reports, questions and advisories for their counties</option>
             <option value="editor">Editor: market prices, reporters, weather and advice jobs</option>
             <option value="viewer">Viewer: numbers only (partners)</option>
+            <option value="lead">Lead farmer / co-op agent: registers farmers in their counties (they confirm by SMS)</option>
             <option value="admin">Admin: everything, including staff accounts</option>
           </select>
         </label>
-        <div class="field">Counties (officers only work in these)<div class="counties" id="countyBoxes"></div></div>
+        <div class="field">Counties (officers and lead farmers only work in these)<div class="counties" id="countyBoxes"></div></div>
         <button class="act" style="align-self:flex-start">Create account</button>
         <p class="msg" id="addMsg"></p>
       </form>
@@ -175,8 +176,8 @@ async function renderStaff() {
   $("#staffTable").innerHTML = `<tr><th>Name</th><th>Role</th><th>Counties</th><th>2-step</th><th>Last login</th><th>Status</th><th></th></tr>` +
     list.map((s) => `<tr>
       <td><b>${esc(s.name)}</b><div class="muted">${esc(s.email)}</div></td>
-      <td><select data-role="${s.id}" ${s.id === me.id ? "disabled" : ""}>${["admin", "officer", "editor", "viewer"].map((r) => `<option ${r === s.role ? "selected" : ""}>${r}</option>`).join("")}</select></td>
-      <td>${s.role === "officer" ? `<input data-counties="${s.id}" value="${esc(s.counties.join(", "))}" style="width:170px">` : '<span class="muted">all</span>'}</td>
+      <td><select data-role="${s.id}" ${s.id === me.id ? "disabled" : ""}>${["admin", "officer", "editor", "viewer", "lead"].map((r) => `<option ${r === s.role ? "selected" : ""}>${r}</option>`).join("")}</select></td>
+      <td>${s.role === "officer" || s.role === "lead" ? `<input data-counties="${s.id}" value="${esc(s.counties.join(", "))}" style="width:170px">` : '<span class="muted">all</span>'}</td>
       <td><span class="status ${s.two_factor ? "on" : "grey"}">${s.two_factor ? "ON" : "off"}</span></td>
       <td>${esc(when(s.last_login_at))}</td>
       <td><span class="status ${s.active ? "on" : "off"}">${s.active ? "active" : "switched off"}</span></td>

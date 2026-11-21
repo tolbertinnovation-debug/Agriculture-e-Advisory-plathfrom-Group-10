@@ -2,7 +2,7 @@ import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { handleUssd, normalizeInputs, USSD_MAX } from "../src/ussd.js";
 import { handleInboundSms } from "../src/smsInbound.js";
-import { getFarmerByPhone } from "../src/farmers.js";
+import { getFarmerByPhone, farmerHistory } from "../src/farmers.js";
 import { listMessages } from "../src/messaging.js";
 import { listQuestions } from "../src/questions.js";
 import { listPestReports } from "../src/pestReports.js";
@@ -131,11 +131,54 @@ test("profile: change language and stop / start SMS", async () => {
   assert.match((await dial(["6"])).text, /SMS advice: ON/);
   (await dial(["6", "1", "2"]));
   assert.equal((await getFarmerByPhone(ctx.db, PHONE)).language, "kpe");
-  (await dial(["6", "2"]));
+  (await dial(["6", "3"]));
   assert.ok((await getFarmerByPhone(ctx.db, PHONE)).opted_out_at);
   assert.match((await dial(["6"])).text, /SMS advice: OFF/);
-  (await dial(["6", "2"]));
+  (await dial(["6", "3"]));
   assert.equal((await getFarmerByPhone(ctx.db, PHONE)).opted_out_at, null);
+});
+
+test("my crops: a farmer changes the planting month and the advice follows it", async () => {
+  (await dial(REGISTER_KOLLIE)); // rice, planted in May
+  assert.match((await dial(["6"])).text, /2 My crops & planting/);
+  const list = (await dial(["6", "2"])).text;
+  assert.match(list, /1 Rice \(upland\): May\n2 Add a crop$/);
+  const one = (await dial(["6", "2", "1"])).text;
+  assert.match(one, /planted in May/);
+  assert.doesNotMatch(one, /Remove/); // the only crop can't be removed
+  assert.match((await dial(["6", "2", "1", "1", "13"])).text, /^Try again/);
+  const r = await dial(["6", "2", "1", "1", "4"]);
+  assert.equal(r.type, "END");
+  assert.match(r.text, /Rice \(upland\) now planted in Apr/);
+  assert.deepEqual((await getFarmerByPhone(ctx.db, PHONE)).crops, [{ crop: "rice", planting_month: 4 }]);
+  assert.match((await dial(["6", "2", "1", "1", "4"])).text, /No change/);
+
+  // Officers see who changed it in the farmer's history.
+  const farmer = await getFarmerByPhone(ctx.db, PHONE);
+  const change = (await farmerHistory(ctx.db, farmer)).timeline.find((e) => e.type === "change");
+  assert.equal(change.by, "farmer");
+  assert.deepEqual(change.changes.crops, ["rice:5", "rice:4"]);
+  assert.equal((await ctx.db.get("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'farmer.self_update'")).n, 1);
+});
+
+test("my crops: add a crop, then remove one (with a check first)", async () => {
+  (await dial(REGISTER_KOLLIE));
+  assert.match((await dial(["6", "2", "2"])).text, /Month you plant CASSAVA/); // only one crop left to add: no list
+  const added = await dial(["6", "2", "2", "3"]);
+  assert.match(added.text, /Cassava added, planted in Mar\.\n(Check your SMS for advice\.|Your advice follows the new dates\.)$/);
+  assert.deepEqual((await getFarmerByPhone(ctx.db, PHONE)).crops.map((c) => c.crop), ["cassava", "rice"]);
+  assert.doesNotMatch((await dial(["6", "2"])).text, /Add a crop/); // grows everything we cover
+
+  assert.match((await dial(["6", "2", "2", "2"])).text, /Stop Rice \(upland\) advice\?/);
+  assert.match((await dial(["6", "2", "2", "2", "2"])).text, /still get Rice/);
+  assert.equal((await getFarmerByPhone(ctx.db, PHONE)).crops.length, 2);
+  assert.match((await dial(["6", "2", "2", "2", "1"])).text, /Rice \(upland\) removed/);
+  assert.deepEqual((await getFarmerByPhone(ctx.db, PHONE)).crops, [{ crop: "cassava", planting_month: 3 }]);
+});
+
+test("my crops screens fit for a farmer with every crop", async () => {
+  (await dial(["1", "4", "5", "3", "5", "5", "1"])); // Kissi, Grand Cape Mount, all crops
+  for (const path of [["6", "2"], ["6", "2", "1"], ["6", "2", "1", "1"], ["6", "2", "1", "2"]]) await dial(path);
 });
 
 test("the longest county name still fits on the profile screen", async () => {

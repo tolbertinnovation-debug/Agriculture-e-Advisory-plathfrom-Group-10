@@ -151,7 +151,12 @@ const MENU = {
   pestok: { text: "Thank you. Report sent to your extension officer.\nRef: PR-2291\nYou will get advice by SMS within 24 hrs.\n\n00. Main menu", next: {} },
   ask: { text: "An officer will CALL YOU BACK free of charge.\n1. Request call-back\n2. Leave voice message\n0. Back", next: { 1: "callback", 2: "callback" } },
   callback: { text: "Request received.\nOfficer Mulbah (Bong) will call you within 24 hrs.\n\n00. Main menu", next: {} },
-  profile: { text: "Kollie M.\nSalala, Bong\nCrops: Rice, Cassava\nLanguage: English\n1. Change language\n0. Back", next: { 1: "lang" } },
+  profile: { text: "Kollie M.\nSalala, Bong\nCrops: Rice, Cassava\nLanguage: English\n1. Change language\n2. My crops & planting\n0. Back", next: { 1: "lang", 2: "crops" } },
+  crops: { text: "Your crops & planting month:\n1. Rice: May\n2. Cassava: Apr\n0. Back", next: { 1: "crop1", 2: "crop1" } },
+  crop1: { text: "Rice: planted in May.\n1. Change planting month\n2. Remove this crop\n0. Back", next: { 1: "month", 2: "cropgone" } },
+  month: { text: "Month you plant RICE?\n1Jan 2Feb 3Mar 4Apr 5May 6Jun\n7Jul 8Aug 9Sep 10Oct 11Nov 12Dec", next: Object.fromEntries([...Array(12)].map((_, i) => [i + 1, "cropok"])) },
+  cropok: { text: "Rice now planted in the new month.\nYour advice follows the new dates.\n\n00. Main menu", next: {} },
+  cropgone: { text: "Rice removed. No more Rice advice.\n\n00. Main menu", next: {} },
   lang: { text: "Language:\n1. Liberian English\n2. Kpelle (voice)\n3. Bassa (voice)\n4. Kissi (voice)\n0. Back", next: { 1: "profile", 2: "profile", 3: "profile", 4: "profile" } },
   sms: { text: "SMS sent to your phone. Free of charge.\n\n00. Main menu", next: {} }
 };

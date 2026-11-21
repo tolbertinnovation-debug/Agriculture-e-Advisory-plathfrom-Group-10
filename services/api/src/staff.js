@@ -6,21 +6,27 @@
 //   officer  farmer reports, questions, hotspots and advisories, ONLY for their own counties
 //   editor   market prices, reporters, weather refresh, advice job (content work)
 //   viewer   read-only numbers (for partners): stats and hotspots, no personal data
+//   lead     lead farmer / co-op agent: registers farmers in their counties (each farmer
+//            confirms by replying YES) and sees only the registrations they made
 import { scryptSync, randomBytes, timingSafeEqual, createHash, createHmac } from "node:crypto";
 import { ValidationError } from "./farmers.js";
 import { findCounty } from "./geo.js";
 
-export const ROLES = ["admin", "officer", "editor", "viewer"];
+export const ROLES = ["admin", "officer", "editor", "viewer", "lead"];
+/** Roles that only work in their own counties. */
+export const AREA_ROLES = ["officer", "lead"];
+export const isAreaLimited = (staff) => AREA_ROLES.includes(staff?.role);
 
 export const PERMISSIONS = {
   admin: ["*"],
   officer: [
-    "stats:read", "hotspots:read", "farmers:read", "farmers:write", "reports:read", "reports:write",
+    "stats:read", "hotspots:read", "farmers:read", "farmers:edit", "farmers:export", "registrations:create", "registrations:read", "reports:read", "reports:write",
     "questions:read", "questions:write", "broadcasts:read", "broadcasts:send",
     "prices:read", "jobs:read", "weather:run"
   ],
   editor: ["stats:read", "hotspots:read", "prices:read", "prices:write", "reporters:write", "jobs:read", "jobs:run", "weather:run", "broadcasts:read"],
-  viewer: ["stats:read", "hotspots:read"]
+  viewer: ["stats:read", "hotspots:read"],
+  lead: ["registrations:create", "registrations:read"]
 };
 
 export const can = (staff, perm) => !!staff && (PERMISSIONS[staff.role]?.includes("*") || PERMISSIONS[staff.role]?.includes(perm));
@@ -108,7 +114,7 @@ function cleanCounties(list, role) {
     if (!county) throw new ValidationError([`counties: unknown county "${c}"`]);
     if (!counties.includes(county)) counties.push(county);
   }
-  if (role === "officer" && !counties.length) throw new ValidationError(["counties: an officer needs at least one county"]);
+  if (AREA_ROLES.includes(role) && !counties.length) throw new ValidationError([`counties: ${role === "lead" ? "a lead farmer" : "an officer"} needs at least one county`]);
   return counties;
 }
 

@@ -60,20 +60,42 @@
   .field input { font: inherit; font-weight: 400; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
   .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .hide { display: none !important; }
-  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } aside.nav { display: none; } .kpis { grid-template-columns: 1fr 1fr; } .row { grid-template-columns: 1fr; } main { padding: 16px; } }
+  .ft { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .ft .v { font-size: 34px; font-weight: 800; color: var(--forest); font-variant-numeric: tabular-nums; }
+  .ft .v.low { color: var(--red); }
+  .ft .l { font-size: 13px; font-weight: 700; }
+  .filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+  tr.click { cursor: pointer; }
+  tr.click:hover td { background: var(--leaf-soft); }
+  dialog#farmerDlg { width: min(820px, 96vw); max-height: 92vh; border: 0; border-radius: 16px; padding: 0; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  dialog#farmerDlg::backdrop { background: rgba(20,40,25,.45); }
+  .dlg-head { position: sticky; top: 0; background: var(--forest); color: #fff; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 10px; z-index: 1; }
+  .dlg-head h3 { margin: 0; color: #fff; }
+  .dlg-body { padding: 16px 20px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 18px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+  .chips span { background: var(--leaf-soft); color: var(--forest); font-size: 12px; font-weight: 800; padding: 4px 8px; border-radius: 6px; }
+  .chips span.bad { background: var(--red-soft); color: var(--red); }
+  .timeline { border-left: 3px solid var(--leaf-soft); padding-left: 12px; font-size: 13.5px; }
+  .timeline .ev { padding: 6px 0 8px; border-bottom: 1px dashed var(--line); }
+  .timeline .ev .when { color: var(--muted); font-size: 12px; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } aside.nav { display: none; } .kpis { grid-template-columns: 1fr 1fr; } .row, .dlg-body, .ft { grid-template-columns: 1fr; } .filters { grid-template-columns: 1fr 1fr; } main { padding: 16px; } }
 </style>
 </head>
 <body class="dash">
 <div class="layout">
   <aside class="nav">
     <div class="logo">🌱 AgriConnect</div>
-    <a href="#overview">📊 Overview</a>
-    <a href="#hotspots">⚠ Hotspots</a>
-    <a href="#weather">🌦️ Weather</a>
-    <a href="#prices">💰 Market prices</a>
-    <a href="#reports">🐛 Pest reports</a>
-    <a href="#questions">💬 Farmer questions</a>
-    <a href="#advisory">📣 Send advisory</a>
+    <a href="#overview" data-perm="stats:read">📊 Overview</a>
+    <a href="#hotspots" data-perm="hotspots:read">⚠ Hotspots</a>
+    <a href="#weather" data-perm="stats:read">🌦️ Weather</a>
+    <a href="#prices" data-perm="prices:read">💰 Market prices</a>
+    <a href="#reports" data-perm="reports:read">🐛 Pest reports</a>
+    <a href="#questions" data-perm="questions:read">💬 Farmer questions</a>
+    <a href="#advisory" data-perm="broadcasts:send">📣 Send advisory</a>
+    <a href="#regRow" data-perm="registrations:create">📝 Register farmers</a>
+    <a href="#farmers" data-perm="farmers:read">👩🏾‍🌾 Farmers</a>
+    <a href="#fieldTest" data-perm="stats:read">🧪 Field test</a>
     <a href="staff.html">🔐 Staff &amp; security</a>
     <a href="ussd.html">📱 USSD simulator</a>
   </aside>
@@ -93,7 +115,28 @@
 
     <div class="kpis" id="kpis"></div>
 
-    <div class="row">
+    <div class="row" id="regRow">
+      <div class="card" id="registerCard">
+        <h3>📝 Register a farmer</h3>
+        <p class="muted" style="margin:0 0 8px">The farmer gets an SMS and joins only when <b>they</b> reply YES (or answer on *347#). Their consent, their choice.</p>
+        <div class="form-row"><input type="text" id="rName" placeholder="Name"><input type="text" id="rPhone" placeholder="Phone, e.g. 0777 123 456"></div>
+        <div class="form-row"><select id="rCounty" aria-label="County"></select><input type="text" id="rDistrict" placeholder="District or town"></div>
+        <div class="form-row"><select id="rLang" aria-label="Language"><option value="en">Liberian English</option><option value="kpe">Kpelle</option><option value="bsq">Bassa</option><option value="kss">Kissi</option></select><span></span></div>
+        <div id="rCrops" style="margin:6px 0 10px;font-size:14px"></div>
+        <button class="btn" onclick="registerFarmer()">Send invitation</button>
+      </div>
+      <div class="card" id="invites"><h3>Invitations <span class="muted">waiting for the farmer's YES</span></h3><div class="scroll"><table id="regTable"></table></div></div>
+    </div>
+
+    <div class="card" id="fieldTest">
+      <h3>🧪 Field test <span class="muted">last 30 days · MVP exit criteria</span></h3>
+      <div class="ft">
+        <div><div class="l">Finish signing up on *347#</div><div class="v" id="ftRate">–</div><div class="muted" id="ftNote"></div><div id="ftSteps" style="margin-top:8px"></div></div>
+        <div><div class="l">“Did it help?” after a pest report</div><div class="v" id="fbRate">–</div><div class="muted" id="fbNote"></div><div id="fbPests" style="margin-top:8px"></div></div>
+      </div>
+    </div>
+
+    <div class="row" id="overviewRow">
       <div class="card"><h3>Registered farmers by county</h3><div id="counties"></div></div>
       <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
         <div class="card" id="hotspots"><h3>⚠ Hotspots (7 days) <span class="muted">3+ reports, same pest &amp; county</span></h3><div class="scroll"><table id="hotspotTable"></table></div></div>
@@ -104,7 +147,7 @@
       </div>
     </div>
 
-    <div class="row">
+    <div class="row" id="marketRow">
       <div class="card" id="weather"><h3>🌦️ Weather by county <button class="act ghost" onclick="refreshWeather()">Refresh now</button></h3><div class="scroll"><table id="weatherTable"></table></div><p class="muted" id="weatherNote" style="margin:8px 0 0"></p></div>
       <div class="card" id="prices">
         <h3>💰 Market prices <select id="pMarket" style="width:auto;font-size:13px;padding:6px"></select></h3>
@@ -117,9 +160,21 @@
       </div>
     </div>
 
+    <div class="card" id="farmers">
+      <h3>👩🏾‍🌾 Farmers <span class="muted" id="fCount"></span><button class="act ghost" id="fExport" onclick="exportFarmers()">⬇ Download CSV</button></h3>
+      <div class="filters">
+        <input type="text" id="fQ" placeholder="Search name, district or phone" aria-label="Search farmers">
+        <select id="fCounty" aria-label="County"></select>
+        <select id="fCrop" aria-label="Crop"><option value="">All crops</option></select>
+        <select id="fStatus" aria-label="Status"><option value="">Everyone</option><option value="active">Getting SMS</option><option value="opted_out">Said STOP</option></select>
+      </div>
+      <div class="scroll"><table id="farmerTable"></table></div>
+      <div class="pager"><button class="act ghost" id="fPrev" onclick="farmerPage(-1)">← Newer</button><span class="muted" id="fPage"></span><button class="act ghost" id="fNext" onclick="farmerPage(1)">Older →</button></div>
+    </div>
+
     <div class="card" id="reports"><h3>Pest reports <span class="muted">newest first</span></h3><div class="scroll"><table id="reportTable"></table></div></div>
 
-    <div class="row">
+    <div class="row" id="workRow">
       <div class="card" id="questions"><h3>Farmer questions</h3><div class="scroll"><table id="questionTable"></table></div></div>
       <div class="card" id="advisory">
         <h3>📣 Send an advisory</h3>
@@ -143,6 +198,23 @@
   </main>
 </div>
 <div id="toast"></div>
+<dialog id="farmerDlg" aria-labelledby="dlgTitle">
+  <div class="dlg-head"><h3 id="dlgTitle">Farmer</h3><button class="act ghost" style="color:#fff;border-color:rgba(255,255,255,.5)" onclick="$('#farmerDlg').close()">Close ✕</button></div>
+  <div class="dlg-body">
+    <div>
+      <div id="dlgInfo"></div>
+      <div id="dlgEdit">
+        <h4 style="margin:14px 0 6px">Correct details</h4>
+        <div class="form-row"><input type="text" id="eName" placeholder="Name" aria-label="Name"><input type="text" id="eDistrict" placeholder="District or town" aria-label="District"></div>
+        <div class="form-row"><select id="eCounty" aria-label="County"></select><select id="eLang" aria-label="Language"><option value="en">Liberian English</option><option value="kpe">Kpelle</option><option value="bsq">Bassa</option><option value="kss">Kissi</option></select></div>
+        <div id="eCrops" style="margin:6px 0 10px;font-size:14px"></div>
+        <button class="btn" onclick="saveFarmer()">Save changes</button>
+        <p class="muted" style="margin:6px 0 0">The phone number and the farmer's STOP/START choice can't be changed here. Every change is recorded in the audit log.</p>
+      </div>
+    </div>
+    <div><h4 style="margin:0 0 8px">History <span class="muted">newest first</span></h4><div class="timeline" id="dlgTimeline"></div></div>
+  </div>
+</dialog>
 <script src="data.js"></script>
 <script src="staff-auth.js"></script>
 <script>
@@ -208,9 +280,193 @@ function applyRole() {
   show("#prices", has("prices:read"));
   show("#prices details", has("reporters:write"));
   show("#weather button", has("weather:run"));
-  // Officers can only message their own counties.
-  const counties = me.role === "officer" ? me.counties : COUNTIES;
-  $("#bCounty").innerHTML = `<option value="">${me.role === "officer" ? "All my counties" : "All counties"}</option>` + counties.map((c) => `<option>${esc(c)}</option>`).join("");
+  show("#kpis, #overviewRow, #marketRow", has("stats:read"));
+  show("#workRow", has("questions:read") || has("broadcasts:send"));
+  show("#regRow", has("registrations:create"));
+  show("#farmers", has("farmers:read"));
+  show("#fieldTest", has("stats:read"));
+  show("#fExport", has("farmers:export"));
+  show("#dlgEdit", has("farmers:edit"));
+  document.querySelectorAll("aside.nav a[data-perm]").forEach((a) => a.classList.toggle("hide", !has(a.dataset.perm)));
+  // Officers and lead farmers only work in their own counties.
+  const area = me.role === "officer" || me.role === "lead";
+  const counties = area ? me.counties : COUNTIES;
+  $("#bCounty").innerHTML = `<option value="">${area ? "All my counties" : "All counties"}</option>` + counties.map((c) => `<option>${esc(c)}</option>`).join("");
+  $("#rCounty").innerHTML = counties.map((c) => `<option>${esc(c)}</option>`).join("");
+  $("#fCounty").innerHTML = `<option value="">${area ? "All my counties" : "All counties"}</option>` + counties.map((c) => `<option>${esc(c)}</option>`).join("");
+  $("#eCounty").innerHTML = counties.map((c) => `<option>${esc(c)}</option>`).join("");
+}
+
+// ---------------- assisted registration ----------------
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function renderCropPicker(crops) {
+  $("#rCrops").innerHTML = "<b>Crops and planting month</b>" + crops.map(([id, name]) =>
+    `<div style="display:flex;gap:8px;align-items:center;margin-top:4px"><label style="flex:1"><input type="checkbox" class="rCrop" value="${esc(id)}"> ${esc(name)}</label>
+     <select class="rMonth" data-crop="${esc(id)}" style="width:auto">${MONTHS.map((m, i) => `<option value="${i + 1}" ${i === 4 ? "selected" : ""}>${m}</option>`).join("")}</select></div>`).join("");
+}
+
+const REG_STATUS = { waiting: ["Waiting for YES", "s-callback"], joined: ["Joined ✓", "s-answered"], refused: ["Said no", "s-closed"], expired: ["Expired", "s-closed"], cancelled: ["Cancelled", "s-closed"] };
+function renderRegistrations(list) {
+  $("#regTable").innerHTML = list.length
+    ? `<tr><th>Farmer</th><th>County</th><th>By</th><th>Status</th><th></th></tr>` +
+      list.map((r) => `<tr><td><b>${esc(r.details.name ?? "")}</b><div class="muted">${esc(r.phone)}</div></td><td>${esc(r.county)}</td><td class="muted">${esc(r.registrar_name ?? "")}</td>
+        <td><span class="status ${REG_STATUS[r.status][1]}">${REG_STATUS[r.status][0]}</span>${r.status === "waiting" ? `<div class="muted">${r.sms_sent} SMS sent</div>` : ""}</td>
+        <td>${r.status === "waiting" ? `<div class="actions"><button class="act ghost" onclick="regAction(${r.id}, 'resend')">Resend</button><button class="act ghost" onclick="regAction(${r.id}, 'cancel')">Cancel</button></div>` : ""}</td></tr>`).join("")
+    : '<tr><td class="empty">No invitations yet. Register a farmer with the form.</td></tr>';
+}
+
+async function registerFarmer() {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  const crops = [...document.querySelectorAll(".rCrop:checked")].map((c) => ({ crop: c.value, planting_month: Number(document.querySelector(`.rMonth[data-crop="${c.value}"]`).value) }));
+  if (!crops.length) return toast("Tick at least one crop.", true);
+  try {
+    const r = await api("POST", "/api/registrations", { name: $("#rName").value, phone: $("#rPhone").value, county: $("#rCounty").value, district: $("#rDistrict").value, language: $("#rLang").value, crops });
+    toast(`Invitation sent to ${r.phone}. They join when they reply YES.`);
+    $("#rName").value = ""; $("#rPhone").value = ""; $("#rDistrict").value = "";
+    refresh();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function regAction(id, action) {
+  if (!live) return toast("Demo mode: start the API to do this for real.");
+  try {
+    await api("POST", `/api/registrations/${id}/${action}`, {});
+    toast(action === "resend" ? "Invitation sent again." : "Invitation cancelled.");
+    refresh();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------------- farmer management: search, history, corrections, CSV ----------------
+const LANG = { en: "Liberian English", kpe: "Kpelle", bsq: "Bassa", kss: "Kissi" };
+const PAGE = 25;
+let farmerOffset = 0, farmerTotal = 0, current = null;
+const cropList = (crops) => crops.map((c) => `${names.crops[c.crop] ?? c.crop} (${MONTHS[c.planting_month - 1]})`).join(", ");
+const plural = (k, word) => `${k} ${word}${k === 1 ? "" : "s"}`;
+const when = (t) => (t ? `${String(t).slice(0, 16).replace("T", " ")} · ${ago(t)} ago` : "");
+
+function farmerFilters() {
+  const p = new URLSearchParams();
+  for (const [k, id] of [["q", "#fQ"], ["county", "#fCounty"], ["crop", "#fCrop"], ["status", "#fStatus"]]) if ($(id).value.trim()) p.set(k, $(id).value.trim());
+  return p;
+}
+
+function renderFarmers(list) {
+  $("#farmerTable").innerHTML = list.length
+    ? `<tr><th>Farmer</th><th>County</th><th>Crops</th><th>Joined</th><th>SMS</th></tr>` +
+      list.map((f) => `<tr class="click" tabindex="0" onclick="openFarmer(${f.id})" onkeydown="if(event.key==='Enter')openFarmer(${f.id})">
+        <td><b>${esc(f.name ?? "(no name)")}</b><div class="muted">${esc(f.phone)}</div></td><td>${esc(f.county)}<div class="muted">${esc(f.district ?? "")}</div></td>
+        <td>${esc(cropList(f.crops))}</td><td>${esc((f.channel ?? "").toUpperCase())}<div class="muted">${f.created_at ? ago(f.created_at) + " ago" : ""}</div></td>
+        <td>${f.opted_out_at ? '<span class="status s-closed">Said STOP</span>' : '<span class="status s-answered">On</span>'}</td></tr>`).join("")
+    : '<tr><td class="empty">No farmers match. Try a shorter search.</td></tr>';
+  $("#fCount").textContent = `${n(farmerTotal)} found`;
+  $("#fPage").textContent = farmerTotal ? `${farmerOffset + 1}–${Math.min(farmerOffset + PAGE, farmerTotal)} of ${n(farmerTotal)}` : "";
+  $("#fPrev").disabled = farmerOffset === 0;
+  $("#fNext").disabled = farmerOffset + PAGE >= farmerTotal;
+}
+
+async function loadFarmers() {
+  if (!live || !has("farmers:read")) return;
+  const p = farmerFilters(); p.set("limit", PAGE); p.set("offset", farmerOffset);
+  try {
+    const res = await fetch(`${API}/api/farmers?${p}`, { headers: { Authorization: "Bearer " + StaffAuth.get() } });
+    if (res.status === 401) return showLogin();
+    const list = await res.json();
+    if (!res.ok) return toast(list.error ?? "Could not load farmers", true);
+    farmerTotal = Number(res.headers.get("X-Total-Count") ?? list.length);
+    renderFarmers(list);
+  } catch (e) { toast(e.message, true); }
+}
+function farmerPage(step) { farmerOffset = Math.max(0, farmerOffset + step * PAGE); loadFarmers(); }
+
+const EVENT = {
+  message: (e) => e.direction === "in"
+    ? `📩 <b>From farmer</b> (${esc(e.channel.toUpperCase())})<div>${esc(e.body)}</div>`
+    : `📤 <b>To farmer</b> · ${esc(e.kind)} · <span class="status ${e.status === "failed" ? "s-new" : e.status === "delivered" ? "s-answered" : "s-closed"}">${esc(e.status)}</span><div>${esc(e.body)}</div>`,
+  pest_report: (e) => `🐛 <b>Pest report PR-${e.id}</b> · ${esc(e.crop ?? "")} · ${esc(names.pests[e.confirmed_pest ?? e.suggested_pest] ?? "not matched")} <span class="status s-${esc(e.status)}">${esc(e.status)}</span>`,
+  question: (e) => `💬 <b>Question Q-${e.id}</b> <span class="status s-${esc(e.status)}">${esc(e.status)}</span><div>${e.kind === "callback" ? "📞 Wants a call-back" : esc(e.body ?? "")}</div>${e.answer ? `<div class="muted">↳ ${esc(e.answer)} (${esc(e.answered_by ?? "")})</div>` : ""}`,
+  registration: (e) => `📝 <b>Invited by ${esc(e.registrar_name ?? "staff")}</b> · ${esc(REG_STATUS[e.status]?.[0] ?? e.status)} · ${e.sms_sent} SMS`,
+  joined: (e) => `✅ <b>Joined</b> via ${esc((e.channel ?? "").toUpperCase())}${e.registered_by ? ` (registered by ${esc(e.registered_by)})` : ""}`,
+  opted_out: () => "⛔ <b>Said STOP</b>: gets no SMS until they send START",
+  change: (e) => `✏️ <b>Details changed</b> by ${e.by === "farmer" ? "the farmer on *347#" : esc(e.by ?? "staff")}` +
+    Object.entries(e.changes).filter(([k]) => k !== "via").map(([k, [from, to]]) => `<div class="muted">${esc(k)}: ${esc(from ?? "—")} → ${esc(to ?? "—")}</div>`).join("")
+};
+
+function renderEditCrops(crops) {
+  const mine = Object.fromEntries((crops ?? []).map((c) => [c.crop, c.planting_month]));
+  const all = Object.keys(names.crops).length ? Object.entries(names.crops) : Object.keys(mine).map((c) => [c, c]);
+  $("#eCrops").innerHTML = "<b>Crops and planting month</b>" + all.map(([id, name]) =>
+    `<div style="display:flex;gap:8px;align-items:center;margin-top:4px"><label style="flex:1"><input type="checkbox" class="eCrop" value="${esc(id)}" ${mine[id] ? "checked" : ""}> ${esc(name)}</label>
+     <select class="eMonth" data-crop="${esc(id)}" style="width:auto">${MONTHS.map((m, i) => `<option value="${i + 1}" ${(mine[id] ?? 5) === i + 1 ? "selected" : ""}>${m}</option>`).join("")}</select></div>`).join("");
+}
+
+async function openFarmer(id) {
+  if (!live) return toast("Demo mode: start the API to open a farmer's history.");
+  try {
+    const h = await api("GET", `/api/farmers/${id}/history`);
+    current = h.farmer;
+    const f = h.farmer, s = h.summary;
+    $("#dlgTitle").textContent = f.name ?? f.phone;
+    $("#dlgInfo").innerHTML = `<div><b>${esc(f.phone)}</b> · ${esc(f.county)}${f.district ? ", " + esc(f.district) : ""} · ${esc(LANG[f.language] ?? f.language)}</div>
+      <div class="muted">Crops: ${esc(cropList(f.crops))}</div>
+      <div class="chips"><span>${s.sms_out} SMS sent</span><span>${s.delivered} delivered</span>${s.failed ? `<span class="bad">${s.failed} failed</span>` : ""}
+        <span>${plural(s.messages_in, "message")} from farmer</span><span>${plural(s.pest_reports, "pest report")}</span><span>${plural(s.questions, "question")}${s.open_questions ? ` (${s.open_questions} open)` : ""}</span>
+        ${f.opted_out_at ? '<span class="bad">Said STOP</span>' : ""}</div>`;
+    $("#eName").value = f.name ?? ""; $("#eDistrict").value = f.district ?? "";
+    if (![...$("#eCounty").options].some((o) => o.value === f.county)) $("#eCounty").insertAdjacentHTML("beforeend", `<option>${esc(f.county)}</option>`);
+    $("#eCounty").value = f.county; $("#eLang").value = f.language;
+    renderEditCrops(f.crops);
+    $("#dlgTimeline").innerHTML = h.timeline.map((e) => `<div class="ev"><div class="when">${when(e.at)}</div>${(EVENT[e.type] ?? (() => esc(e.type)))(e)}</div>`).join("") || '<p class="empty">Nothing yet.</p>';
+    if (!$("#farmerDlg").open) $("#farmerDlg").showModal();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function saveFarmer() {
+  const crops = [...document.querySelectorAll(".eCrop:checked")].map((c) => ({ crop: c.value, planting_month: Number(document.querySelector(`.eMonth[data-crop="${c.value}"]`).value) }));
+  if (!crops.length) return toast("Tick at least one crop.", true);
+  try {
+    const r = await api("PATCH", `/api/farmers/${current.id}`, { name: $("#eName").value, district: $("#eDistrict").value, county: $("#eCounty").value, language: $("#eLang").value, crops });
+    const changed = Object.keys(r.changes);
+    toast(changed.length ? `Saved: ${changed.join(", ")} changed.` : "Nothing changed.");
+    await openFarmer(current.id);
+    loadFarmers();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function exportFarmers() {
+  if (!live) return toast("Demo mode: start the API to download the list.");
+  const p = farmerFilters();
+  try {
+    const res = await fetch(`${API}/api/farmers/export.csv?${p}`, { headers: { Authorization: "Bearer " + StaffAuth.get() } });
+    if (!res.ok) return toast((await res.json().catch(() => ({}))).error ?? "Download failed", true);
+    const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "agriconnect-farmers.csv";
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(await res.blob()), download: name });
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast(`Downloaded ${name}`);
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------------- field test (MVP exit criteria) ----------------
+const STEP_NAMES = { language: "Language", county: "County", crop: "Crop", month: "Planting month", consent: "Consent screen" };
+const pct = (x) => (x === null || x === undefined ? "–" : `${Math.round(x * 100)}%`);
+function renderFieldTest(ft) {
+  const u = ft.ussd_signup, f = ft.did_it_help;
+  $("#ftRate").textContent = pct(u.completion_rate);
+  $("#ftRate").classList.toggle("low", u.completion_rate !== null && !u.meets_target);
+  const finished = u.registered + u.cancelled + u.abandoned;
+  $("#ftNote").innerHTML = finished
+    ? `${n(u.registered)} of ${n(finished)} finished · target ${pct(u.target)} ${u.meets_target ? "✓" : "✗"}${u.in_progress ? ` · ${n(u.in_progress)} dialling now` : ""}`
+    : "No one has tried to sign up on *347# yet.";
+  const quit = Object.entries(u.gave_up_at).filter(([, k]) => k > 0);
+  const max = Math.max(1, ...quit.map(([, k]) => k));
+  $("#ftSteps").innerHTML = quit.length
+    ? '<div class="muted" style="font-size:12px;margin-bottom:2px">Where people stopped:</div>' + quit.map(([step, k]) => `<div class="bar"><span>${esc(STEP_NAMES[step] ?? step)}</span><div class="track"><i style="width:${(100 * k) / max}%;background:var(--gold)"></i></div><b>${n(k)}</b></div>`).join("")
+    : "";
+  $("#fbRate").textContent = pct(f.helped_rate);
+  $("#fbRate").classList.toggle("low", f.helped_rate !== null && f.helped_rate < 0.6);
+  $("#fbNote").innerHTML = f.asked
+    ? `${n(f.yes)} yes · ${n(f.no)} no (an officer calls back) · ${n(f.answered)} of ${n(f.asked)} answered`
+    : "Asked by SMS 3 days after a pest report. No answers yet.";
+  $("#fbPests").innerHTML = f.by_pest.filter((p) => p.answered).map((p) => `<div class="bar"><span>${esc(p.pest_name)}</span><div class="track"><i style="width:${100 * p.helped_rate}%"></i></div><b>${pct(p.helped_rate)}</b></div>`).join("");
 }
 
 // ---------------- rendering (same for live and demo) ----------------
@@ -261,7 +517,7 @@ function renderQuestions(list) {
     ? `<tr><th>Farmer</th><th>Question</th><th>Age</th><th>Status</th></tr>` +
       list.map((q) => {
         const isCallback = q.kind === "callback";
-        const text = isCallback ? "📞 Wants a call-back" : esc(q.body);
+        const text = isCallback ? "📞 Wants a call-back" + (q.body ? `<div class="muted">${esc(q.body)}</div>` : "") : esc(q.body);
         const action = q.status !== "open" ? (q.answer ? `<div class="muted">↳ ${esc(q.answer)}</div>` : "")
           : isCallback
             ? `<div class="answer"><button class="act" onclick="answer(${q.id}, true)">Mark as called</button></div>`
@@ -419,13 +675,20 @@ async function refresh() {
   try {
     // Only ask for what this role may see.
     const get = (perm, path) => (has(perm) ? api("GET", path) : Promise.resolve(null));
+    const regs = has("registrations:read") ? api("GET", "/api/registrations?limit=30") : Promise.resolve(null);
+    const fieldTest = get("stats:read", "/api/field-test");
     const [stats, hotspots, reports, questions, broadcasts, jobs, weather, prices, flagged, reporters] = await Promise.all([
       get("stats:read", "/api/stats"), get("hotspots:read", "/api/hotspots"), get("reports:read", "/api/pest-reports?limit=25"),
       get("questions:read", "/api/questions?limit=25"), get("broadcasts:read", "/api/broadcasts"), get("jobs:read", "/api/jobs"),
-      api("GET", "/api/weather"), api("GET", "/api/prices"), get("prices:read", "/api/prices/flagged"), get("prices:read", "/api/reporters")
+      get("stats:read", "/api/weather"), get("stats:read", "/api/prices"), get("prices:read", "/api/prices/flagged"), get("prices:read", "/api/reporters")
     ]);
-    renderWeather(weather); renderPrices(prices, flagged ?? [], reporters ?? []);
+    if (weather) renderWeather(weather);
+    if (prices) renderPrices(prices, flagged ?? [], reporters ?? []);
+    const registrations = await regs;
+    if (registrations) renderRegistrations(registrations);
     if (stats) renderStats(stats);
+    const ft = await fieldTest;
+    if (ft) renderFieldTest(ft);
     if (hotspots) renderHotspots(hotspots);
     if (reports) renderReports(reports);
     if (questions) renderQuestions(questions);
@@ -451,6 +714,23 @@ function demo() {
   ]);
   renderQuestions(DASH.questions.map((q, i) => ({ id: i, phone: q.farmer, county: q.county, channel: "sms", kind: "text", body: q.q, status: q.status === "Answered" ? "answered" : "open" })));
   renderBroadcasts([]);
+  renderCropPicker([["rice", "Rice (upland)"], ["cassava", "Cassava"]]);
+  $("#rCounty").innerHTML = COUNTIES.map((c) => `<option>${esc(c)}</option>`).join("");
+  $("#fCounty").innerHTML = '<option value="">All counties</option>' + COUNTIES.map((c) => `<option>${esc(c)}</option>`).join("");
+  renderFieldTest({
+    ussd_signup: { started: 52, registered: 41, cancelled: 3, abandoned: 6, in_progress: 2, completion_rate: 41 / 50, target: 0.8, meets_target: true, gave_up_at: { language: 1, county: 3, crop: 0, month: 2, consent: 3 } },
+    did_it_help: { asked: 38, answered: 29, yes: 23, no: 6, helped_rate: 23 / 29, by_pest: [{ pest_name: "Fall armyworm", answered: 17, helped_rate: 15 / 17 }, { pest_name: "Rice blast", answered: 8, helped_rate: 5 / 8 }, { pest_name: "Cassava mosaic disease", answered: 4, helped_rate: 3 / 4 }] }
+  });
+  farmerTotal = 3;
+  renderFarmers([
+    { id: 1, name: "Kollie M.", phone: "+231770000001", county: "Bong", district: "Salala", channel: "ussd", crops: [{ crop: "rice", planting_month: 5 }, { crop: "cassava", planting_month: 4 }] },
+    { id: 2, name: "Fatu K.", phone: "+231770000002", county: "Lofa", district: "Voinjama", channel: "assisted", crops: [{ crop: "rice", planting_month: 6 }] },
+    { id: 3, name: "Musu T.", phone: "+231770000003", county: "Nimba", district: "Sanniquellie", channel: "sms", opted_out_at: "x", crops: [{ crop: "cassava", planting_month: 5 }] }
+  ]);
+  renderRegistrations([
+    { id: 1, phone: "+231777000101", county: "Bong", registrar_name: "Lead Farmer Kerkula", status: "joined", sms_sent: 1, details: { name: "Kollie M." } },
+    { id: 2, phone: "+231777000102", county: "Bong", registrar_name: "Lead Farmer Kerkula", status: "waiting", sms_sent: 2, details: { name: "Musu K." } }
+  ]);
   renderWeather(COUNTIES.slice(0, 6).map((county, i) => ({ county, sample: true, days: WEATHER.map((w, d) => ({ t_max: w.hi, rain_prob: i % 3 ? Math.max(5, w.rain - 50) : w.rain })), advice: { level: i % 3 ? "ok" : "rain" } })));
   renderPrices(MARKETS.map((name, mi) => ({ market: "m" + mi, market_name: name, items: PRICES.filter((p) => p.prices[mi]).map((p) => ({ name: p.item, unit: p.unit, price_lrd: p.prices[mi], change_pct: p.change, reported_at: new Date().toISOString() })) })), [], []);
   $("#jobInfo").innerHTML = "Crop-stage advice goes out <b>every day at 07:00</b>. SMS provider: sample data.";
@@ -460,14 +740,20 @@ let started = false;
 async function start() {
   try { me = await api("GET", "/api/staff/me"); } catch { return; } // shows the login form
   applyRole();
-  if (started) return refresh();
+  if (started) { loadFarmers(); return refresh(); }
   started = true;
   try {
     const [crops, pests] = await Promise.all([api("GET", "/api/content/crops"), api("GET", "/api/content/pests")]);
     names.crops = Object.fromEntries(crops.map((c) => [c.id, c.name]));
     names.pests = Object.fromEntries(pests.pests.map((p) => [p.id, p.name]));
     $("#bCrop").innerHTML = '<option value="">All crops</option>' + crops.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+    renderCropPicker(crops.map((c) => [c.id, c.name]));
+    $("#fCrop").innerHTML = '<option value="">All crops</option>' + crops.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
   } catch {}
+  let typing;
+  $("#fQ").oninput = () => { clearTimeout(typing); typing = setTimeout(() => { farmerOffset = 0; loadFarmers(); }, 300); };
+  for (const id of ["#fCounty", "#fCrop", "#fStatus"]) $(id).onchange = () => { farmerOffset = 0; loadFarmers(); };
+  loadFarmers();
   await refresh();
   updatePreview();
   setInterval(() => me && refresh(), 5000);

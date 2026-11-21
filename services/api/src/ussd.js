@@ -14,7 +14,8 @@
 // 0 = back, 00 = main menu.
 import { COUNTIES, normalizePhone } from "./geo.js";
 import { adviceForFarmer } from "./engine.js";
-import { createFarmer, getFarmerByPhone, setLanguage, setOptedOut } from "./farmers.js";
+import { createFarmer, getFarmerByPhone, setLanguage, setOptedOut, updateFarmer } from "./farmers.js";
+import { audit } from "./staff.js";
 import { createPestReport } from "./pestReports.js";
 import { createQuestion } from "./questions.js";
 import { sendSms } from "./messaging.js";
@@ -22,6 +23,8 @@ import { sendAdviceToFarmer } from "./scheduler.js";
 import { getForecast, shortForecast } from "./weather.js";
 import { latestPrices, priceText } from "./prices.js";
 import { isUniqueViolation } from "./db.js";
+import { waitingRegistration, answerRegistration } from "./registrations.js";
+import { trackSignup, finishSignup } from "./fieldTest.js";
 
 export const USSD_MAX = 182;
 
@@ -33,6 +36,7 @@ const LANGUAGE_OPTIONS = [
 ];
 const LANGUAGE_NAMES = Object.fromEntries(LANGUAGE_OPTIONS.map((l) => [l.value, l.label]));
 const MONTHS = "1Jan 2Feb 3Mar 4Apr 5May 6Jun\n7Jul 8Aug 9Sep 10Oct 11Nov 12Dec";
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const COUNTY_PAGE_1 = COUNTIES.slice(0, 7);
 const COUNTY_PAGE_2 = COUNTIES.slice(7);
 
@@ -61,6 +65,7 @@ export function normalizeInputs(text) {
 function session(answers) {
   let i = 0;
   return {
+    step: null, // which registration screen we are on (for the sign-up funnel)
     ask(prompt, parse) {
       let retry = "";
       for (;;) {
@@ -85,31 +90,43 @@ function askCounty(s) {
   return s.ask(page2, (v) => COUNTY_PAGE_2[Number(v) - 1]);
 }
 
+function askMonth(s, cropName) {
+  return s.ask(`Month you plant ${cropName.toUpperCase()}?\n${MONTHS}`, (v) => {
+    const m = Number(v);
+    return Number.isInteger(m) && m >= 1 && m <= 12 ? m : undefined;
+  });
+}
+
 // ---------------------------------------------------------------- flows
 
 async function register(ctx, s, phone) {
   const { db, content } = ctx;
+  s.step = "language";
   const language = s.choose("Choose language:", LANGUAGE_OPTIONS);
+  s.step = "county";
   const county = askCounty(s);
+  s.step = "crop";
 
   const cropList = [...content.crops.values()];
   const cropOptions = cropList.map((c) => ({ label: c.name, value: [c.id] }));
   if (cropList.length > 1) cropOptions.push({ label: "All of these", value: cropList.map((c) => c.id) });
   const cropIds = s.choose("Your main crop:", cropOptions);
 
+  s.step = "month";
   const crops = cropIds.map((id) => ({
     crop: id,
-    planting_month: s.ask(`Month you plant ${content.crops.get(id).name.toUpperCase()}?\n${MONTHS}`, (v) => {
-      const m = Number(v);
-      return Number.isInteger(m) && m >= 1 && m <= 12 ? m : undefined;
-    })
+    planting_month: askMonth(s, content.crops.get(id).name)
   }));
 
+  s.step = "consent";
   const agree = s.choose("AgriConnect sends free farm advice by SMS. Your number stays private. Reply STOP anytime.", [
     { label: "I agree", value: "yes" },
     { label: "Cancel", value: "no" }
   ]);
-  if (agree !== "yes") return end("Registration cancelled. Dial *347# anytime to join.");
+  if (agree !== "yes") {
+    await finishSignup(db, phone, "cancelled", ctx.now());
+    return end("Registration cancelled. Dial *347# anytime to join.");
+  }
 
   let farmer;
   try {
@@ -119,6 +136,7 @@ async function register(ctx, s, phone) {
     if (isUniqueViolation(err)) return end("You are already registered. Dial *347# for the full menu.");
     throw err;
   }
+  await finishSignup(db, phone, "registered", ctx.now());
   await sendSms(db, {
     phone,
     farmerId: farmer.id,
@@ -176,16 +194,62 @@ async function profile(ctx, s, farmer) {
     `Your profile:\n${farmer.county} County\nCrops: ${crops}\nLanguage: ${LANGUAGE_NAMES[farmer.language] ?? farmer.language}\nSMS advice: ${smsOn ? "ON" : "OFF"}`,
     [
       { label: "Change language", value: "language" },
+      { label: "My crops & planting", value: "crops" },
       { label: smsOn ? "Stop SMS advice" : "Start SMS advice", value: "sms" }
     ]
   );
+  if (action === "crops") return await myCrops(ctx, s, farmer);
   if (action === "language") {
     const language = s.choose("Choose language:", LANGUAGE_OPTIONS);
     await setLanguage(db, farmer.id, language);
     return end(`Language changed to ${LANGUAGE_NAMES[language]}.`);
   }
   await setOptedOut(db, farmer.id, smsOn);
-  return end(smsOn ? "SMS advice stopped. Dial *347# and choose 6 to start again." : "SMS advice is ON again. Welcome back!");
+  return end(smsOn ? "SMS advice stopped. Dial *347#, choose 6 then 3 to start again." : "SMS advice is ON again. Welcome back!");
+}
+
+/**
+ * The farmer changes a planting month, adds a crop or removes one. Advice follows the new
+ * calendar from the next message; if a new stage is due now, it is sent straight away.
+ */
+async function myCrops(ctx, s, farmer) {
+  const { db, content } = ctx;
+  const name = (id) => content.crops.get(id)?.name ?? id;
+  const mine = farmer.crops;
+  const others = [...content.crops.keys()].filter((id) => !mine.some((c) => c.crop === id));
+  const options = mine.map((c) => ({ label: `${name(c.crop)}: ${MONTH_NAMES[c.planting_month - 1]}`, value: c.crop }));
+  if (others.length) options.push({ label: "Add a crop", value: "+add" });
+  const pick = s.choose("Your crops & planting month:", options);
+
+  let crops, done;
+  if (pick === "+add") {
+    const id = others.length === 1 ? others[0] : s.choose("Add which crop?", others.map((c) => ({ label: name(c), value: c })));
+    const month = askMonth(s, name(id));
+    crops = [...mine, { crop: id, planting_month: month }];
+    done = `${name(id)} added, planted in ${MONTH_NAMES[month - 1]}.`;
+  } else {
+    const current = mine.find((c) => c.crop === pick);
+    const actions = [{ label: "Change planting month", value: "month" }];
+    if (mine.length > 1) actions.push({ label: "Remove this crop", value: "remove" });
+    const action = s.choose(`${name(pick)}: planted in ${MONTH_NAMES[current.planting_month - 1]}.`, actions);
+    if (action === "remove") {
+      const sure = s.choose(`Stop ${name(pick)} advice?`, [{ label: "Yes, remove", value: true }, { label: "No, keep it", value: false }]);
+      if (!sure) return end(`OK. You still get ${name(pick)} advice.`);
+      crops = mine.filter((c) => c.crop !== pick);
+      done = `${name(pick)} removed. No more ${name(pick)} advice.`;
+    } else {
+      const month = askMonth(s, name(pick));
+      if (month === current.planting_month) return end(`No change: ${name(pick)} stays ${MONTH_NAMES[month - 1]}.`);
+      crops = mine.map((c) => (c.crop === pick ? { ...c, planting_month: month } : c));
+      done = `${name(pick)} now planted in ${MONTH_NAMES[month - 1]}.`;
+    }
+  }
+
+  const { farmer: updated, changes } = await updateFarmer(db, content, farmer, { crops });
+  // Who changed what, so officers can see it in the farmer's history (no staff member: the farmer did it).
+  if (changes.crops) await audit(db, null, "farmer.self_update", farmer.phone, { via: "ussd", ...changes });
+  const sent = (await sendAdviceToFarmer(ctx, updated)).some((r) => r.action === "sent");
+  return end(`${done}\n${sent ? "Check your SMS for advice." : "Your advice follows the new dates."}`);
 }
 
 async function weather(ctx, s, farmer) {
@@ -224,12 +288,33 @@ export async function handleUssd(ctx, { phoneNumber, text }) {
   try {
     const farmer = await getFarmerByPhone(ctx.db, phone);
     if (!farmer) {
+      // Someone registered this farmer for them: ask for their consent first.
+      const invite = await waitingRegistration(ctx.db, phone, ctx.now());
+      if (invite) {
+        const crops = invite.details.crops.map((c) => ctx.content.crops.get(c.crop)?.name.split(" ")[0] ?? c.crop).join(" & ");
+        const yes = s.choose(`${(invite.registrar_name ?? "An officer").slice(0, 22)} registered you for free ${crops} advice in ${invite.county}. Join?`, [
+          { label: "Yes, join (free)", value: true },
+          { label: "No", value: false }
+        ]);
+        const answer = await answerRegistration(ctx, phone, yes);
+        return answer.status === "joined"
+          ? end("Welcome! You are registered.\nCheck your SMS for your first farm advice.")
+          : end("OK. You are not registered. Dial *347# if you change your mind.");
+      }
       const choice = s.choose("Welcome to AgriConnect Liberia. Free farm advice.", [
         { label: "Register (free)", value: "register" },
         { label: "Report pest or disease", value: "pest" },
         { label: "Ask an expert", value: "ask" }
       ]);
-      if (choice === "register") return await register(ctx, s, phone);
+      if (choice === "register") {
+        try {
+          return await register(ctx, s, phone);
+        } catch (err) {
+          // Waiting on a registration screen: note how far this phone got.
+          if (err instanceof NeedInput && s.step) await trackSignup(ctx.db, phone, s.step, ctx.now());
+          throw err;
+        }
+      }
       if (choice === "pest") return await reportPest(ctx, s, phone, null);
       return await askExpert(ctx, s, phone, null);
     }
