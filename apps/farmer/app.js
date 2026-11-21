@@ -143,14 +143,15 @@ function appbar(title, back) {
   const waiting = state.outbox.length;
   const badge = !online()
     ? `<span class="pill offline">● Offline${waiting ? ` · ${waiting} waiting` : ""}</span>`
-    : waiting ? `<span class="pill waiting">⟳ Sending ${waiting}…</span>` : `<span class="pill online">● Online</span>`;
+    : waiting ? `<span class="pill waiting">⟳ Sending ${waiting}…</span>` : `<span class="pill online"><i class="dot"></i>Offline ready</span>`;
+  const me = state.token && state.screen === "home" ? `<button class="back" data-go="profile" aria-label="My profile">${ic("user")}</button>` : "";
   $("#appbar").innerHTML =
     (back ? `<button class="back" data-go="home" aria-label="Back">${ic("arrow-left")}</button>` : `<span class="mark">${ic("sprout")}</span>`) +
-    `<h1>${esc(title)}</h1>${state.token ? badge : ""}`;
+    `<h1>${esc(title)}</h1>${state.token ? badge : ""}${me}`;
 }
 
 function tabbar() {
-  const tabs = [["home", "house", "Home"], ["guide", "calendar-days", "Crops"], ["pest", "scan-search", "Pest Doctor"], ["ask", "messages-square", "Ask"], ["profile", "user", "Me"]];
+  const tabs = [["home", "house", "Home"], ["guide", "calendar-days", "Crops"], ["pest", "scan-search", "Pest Doctor"], ["prices", "coins", "Prices"], ["ask", "messages-square", "Ask"]];
   $("#footer").innerHTML = `<nav class="tabbar">` + tabs.map(([id, icon, l]) =>
     `<button class="${state.screen === id ? "on" : ""}" data-go="${id}" aria-label="${l}">${ic(icon)}<span>${l}</span></button>`).join("") + `</nav>`;
 }
@@ -163,37 +164,43 @@ const when = (sql) => (sql ? new Date(sql.replace(" ", "T") + (sql.endsWith("Z")
 const screens = {
   login() {
     appbar("AgriConnect", false);
+    const steps = `<div class="steps"><span class="${state.pendingPhone ? "done" : "on"}">1 Phone</span><span class="${state.pendingPhone ? "on" : ""}">2 Code</span><span>3 Your farm</span></div>`;
     if (!state.pendingPhone) {
       return `
         <div class="hero-mark">${ic("sprout")}</div>
-        <h2 class="center" style="margin:0">Free farm advice</h2>
-        <p class="center muted" style="margin:0">Weather, pest help and answers from extension officers, for Liberian farmers.</p>
+        <h2 class="center" style="margin:0">Welcome to AgriConnect</h2>
+        <p class="center muted" style="margin:0">Free farm advice, pest help, weather and market prices for Liberian farmers.</p>
         ${errBox()}
         <form data-form="phone" class="card" style="display:flex;flex-direction:column;gap:12px">
+          <h3 style="margin:0">Log in or sign up</h3>
           <label class="field">Your phone number<input type="tel" name="phone" placeholder="0777 123 456" autocomplete="tel" required></label>
-          <button class="btn" ${state.busy ? "disabled" : ""}>${state.busy ? "Sending…" : "Send me a code"}</button>
-          <small class="muted">We send a free SMS with a 6-digit code. No password needed.</small>
+          <button class="btn" ${state.busy ? "disabled" : ""}>${state.busy ? "Sending…" : `Continue ${ic("arrow-right")}`}</button>
+          <small class="muted">New here? Use the same button: we will set up your free account. No password needed.</small>
         </form>
-        <p class="center muted">No smartphone? Dial <b>*347#</b> on any phone.</p>`;
+        ${steps}
+        <p class="center muted" style="margin:0">No smartphone? Dial <b>*347#</b> on any phone.</p>
+        <p class="center muted" style="margin:0"><a href="/prototype/dashboard.html">Extension officer or staff? Log in here</a></p>`;
     }
     return `
       <h2 style="margin:0">Enter your code</h2>
-      <p class="muted" style="margin:0">We sent an SMS to <b>${esc(state.pendingPhone)}</b>.</p>
-      ${state.devCode ? `<div class="note">Development mode: no real SMS is sent. Your code is <b>${esc(state.devCode)}</b>.</div>` : ""}
+      <p class="muted" style="margin:0">We sent a free SMS to <b>${esc(state.pendingPhone)}</b>.</p>
+      ${state.devCode ? `<div class="note">Demo: no real SMS is sent, so your code is filled in for you.</div>` : ""}
       ${errBox()}
       <form data-form="code" class="card" style="display:flex;flex-direction:column;gap:12px">
-        <label class="field">6-digit code<input inputmode="numeric" name="code" maxlength="6" pattern="\\d{6}" autocomplete="one-time-code" required></label>
-        <button class="btn" ${state.busy ? "disabled" : ""}>${state.busy ? "Checking…" : "Sign in"}</button>
+        <label class="field">6-digit code<input inputmode="numeric" name="code" maxlength="6" pattern="\\d{6}" autocomplete="one-time-code" value="${esc(state.devCode ?? "")}" data-action="code-input" required></label>
+        <button class="btn" ${state.busy ? "disabled" : ""}>${state.busy ? "Checking…" : `Continue ${ic("arrow-right")}`}</button>
       </form>
+      ${steps}
       <button class="linkish" data-action="change-phone">Use another number</button>`;
   },
 
   register() {
-    appbar("Register", false);
+    appbar("Create your account", false);
     const crops = state.content?.crops ?? [];
     return `
+      <div class="steps"><span class="done">1 Phone</span><span class="done">2 Code</span><span class="on">3 Your farm</span></div>
       <h2 style="margin:0">Tell us about your farm</h2>
-      <p class="muted" style="margin:0">So we can send the right advice at the right time.</p>
+      <p class="muted" style="margin:0">Last step. So we can send the right advice at the right time.</p>
       ${errBox()}
       <form data-form="register" class="card" style="display:flex;flex-direction:column;gap:12px">
         <label class="field">Your name <small>(optional)</small><input type="text" name="name" maxlength="80"></label>
@@ -206,7 +213,7 @@ const screens = {
             : `<small>Connect to the internet once to load the crop list.</small>`}
         </div>
         <label class="check"><input type="checkbox" name="consent" required> I agree to get free farm advice by SMS. My number stays private. I can reply STOP anytime.</label>
-        <button class="btn" ${state.busy ? "disabled" : ""}>${state.busy ? "Saving…" : "Register"}</button>
+        <button class="btn" ${state.busy ? "disabled" : ""}>${state.busy ? "Saving…" : "Create my account"}</button>
       </form>`;
   },
 
@@ -215,30 +222,33 @@ const screens = {
     const h = state.home;
     if (!h) return `<p class="muted">Connect to the internet once to load your farm advice.</p>${errBox()}`;
     const f = h.farmer;
+    const hour = new Date().getHours();
+    const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
     const alerts = [
-      ...h.alerts.hotspots.map((x) => `<div class="card alert"><b>${ic("triangle-alert")} ${esc(x.pest_name)} in ${esc(x.county)}</b><p>${x.reports} farmers reported it this week. Check your fields.</p></div>`),
+      ...h.alerts.hotspots.map((x) => `<div class="card alert"><b>${ic("triangle-alert")} Pest alert · ${esc(x.county)} County</b><p>${esc(x.pest_name)}: ${x.reports} farmers reported it this week. Check your fields.</p></div>`),
       ...h.alerts.broadcasts.slice(0, 2).map((b) => `<div class="card alert"><b>${ic("megaphone")} Officer advisory · ${esc(when(b.created_at))}</b><p>${esc(b.message)}</p></div>`)
     ].join("");
-    const advice = h.advice.map((a) => a.message
-      ? `<div class="card advice"><div class="stage-name">${esc(cropName(a.crop))} · ${esc(a.stage_name)}</div><p>${esc(a.message)}</p></div>`
-      : `<div class="card advice"><div class="stage-name">${esc(cropName(a.crop))}</div><p class="muted">Between seasons. We will send advice when your season starts.</p></div>`).join("");
+    const done = store.get("done:" + h.date, {});
+    const tasks = h.advice.map((a, i) => a.message
+      ? `<label class="task"><input type="checkbox" data-action="task" data-key="${esc(a.crop)}-${i}" ${done[a.crop + "-" + i] ? "checked" : ""}><span><span class="tag">${esc(cropName(a.crop))}</span> ${esc(a.message.replace(/^[A-Z][A-Z ()]+:\s*/, ""))}</span></label>`
+      : `<div class="task"><span class="tag">${esc(cropName(a.crop))}</span><span class="muted">Between seasons. Advice starts when your season starts.</span></div>`).join("");
+    const today = h.weather?.days?.[0];
     return `
-      <div><div class="muted">${esc(f.district ? f.district + ", " : "")}${esc(f.county)} County</div><p class="hello">Hello${f.name ? ", " + esc(f.name) : ""}</p></div>
+      <div><div class="muted">${esc(f.district ? f.district + ", " : "")}${esc(f.county)} County</div><p class="hello">${greet}${f.name ? ", " + esc(f.name) : ""}</p></div>
       ${h.weather ? `<button class="card weather-hero" data-go="weather" style="text-align:left;font:inherit">
         <span class="big">${ic(WEATHER_ICON[h.weather.advice.level], "i wx")}</span>
-        <div style="flex:1"><div class="temp">${h.weather.days[0].t_max}°C <span style="font-size:14px;font-weight:700">rain ${h.weather.days[0].rain_prob}%</span></div>
-        <div style="font-size:13px">${esc(h.weather.advice.text)}</div></div><span class="hero-more">5-day ${ic("chevron-right")}</span></button>` : ""}
+        <div style="flex:1"><div class="temp">${today.t_max}°C</div>
+        <div style="font-size:13.5px">${esc(h.weather.advice.text)} · ${today.rain_prob}% rain</div></div><span class="hero-more">5-day ${ic("chevron-right")}</span></button>` : ""}
       ${alerts}
-      <div class="eyebrow">This week on your farm</div>
-      ${advice}
       <div class="grid">
         <button class="tile" data-go="guide"><span class="ic green">${ic("calendar-days")}</span>Crop Guide</button>
         <button class="tile" data-go="pest"><span class="ic red">${ic("scan-search")}</span>Pest Doctor</button>
+        <button class="tile" data-go="prices"><span class="ic gold">${ic("coins")}</span>Market Prices</button>
         <button class="tile" data-go="ask"><span class="ic gold">${ic("messages-square")}</span>Ask Expert</button>
-        <button class="tile" data-go="reports"><span class="ic green">${ic("clipboard-list")}</span>My Reports</button>
         <button class="tile" data-go="weather"><span class="ic blue">${ic("cloud-sun")}</span>Weather</button>
-        <button class="tile" data-go="prices"><span class="ic gold">${ic("coins")}</span>Prices</button>
+        <button class="tile" data-go="reports"><span class="ic green">${ic("clipboard-list")}</span>My Reports</button>
       </div>
+      <div class="card"><h3>This week on your farm</h3>${tasks || `<p class="muted" style="margin:0">No tasks this week.</p>`}</div>
       <p class="muted center" style="margin:0">Updated ${esc(h.date)}</p>`;
   },
 
@@ -461,6 +471,10 @@ document.addEventListener("change", async (e) => {
     try { state.photo = await shrinkPhoto(file); state.error = null; } catch (err) { state.error = err.message; }
     return render();
   }
+  if (action === "task") {
+    const key = "done:" + state.home.date, done = store.get(key, {});
+    done[e.target.dataset.key] = e.target.checked; store.set(key, done); return;
+  }
   if (action === "market") { state.market = e.target.value; save(); render(); await loadPrices(state.market); render(); return; }
   if (action !== "language" && action !== "sms") return;
   try {
@@ -478,6 +492,11 @@ function render() {
   if (shownScreen !== state.screen) { $("#content").scrollTop = 0; shownScreen = state.screen; }
   if (state.token && state.screen !== "register") tabbar(); else $("#footer").innerHTML = "";
 }
+
+// Typing the 6th digit of the code continues by itself: one less button to find.
+document.addEventListener("input", (e) => {
+  if (e.target.dataset.action === "code-input" && /^\d{6}$/.test(e.target.value) && !state.busy) e.target.form.requestSubmit();
+});
 
 window.addEventListener("online", () => { render(); sync(); });
 window.addEventListener("offline", render);

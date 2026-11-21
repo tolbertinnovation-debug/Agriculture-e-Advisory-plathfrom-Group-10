@@ -1,6 +1,6 @@
 // Offline-first: the app shell is cached so the app opens with no network.
 // Farmer data is cached by app.js (localStorage); API calls always go to the network.
-const CACHE = "agriconnect-app-v4";
+const CACHE = "agriconnect-app-v5";
 const SHELL = ["./", "index.html", "app.js", "engine.js", "styles.css", "manifest.json", "assets/icons.js", "assets/inter-var.woff2"];
 
 self.addEventListener("install", (e) => {
