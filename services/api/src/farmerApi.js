@@ -5,7 +5,7 @@ import { requestOtp, verifyOtp, endSession, farmerAuth, AuthError } from "./auth
 import { cleanFarmerInput, createFarmer, getFarmer, setLanguage, setOptedOut, ValidationError } from "./farmers.js";
 import { adviceForFarmer } from "./engine.js";
 import { createPestReport, getPestReport } from "./pestReports.js";
-import { createQuestion, getQuestion } from "./questions.js";
+import { createQuestion, getQuestion, cleanPhoto } from "./questions.js";
 import { listHotspots } from "./hotspots.js";
 import { sendSms } from "./messaging.js";
 import { sendAdviceToFarmer } from "./scheduler.js";
@@ -90,7 +90,8 @@ export function farmerRoutes(app, ctx, { exposeDevCode = false } = {}) {
     const f = req.farmer;
     const reports = (await db.all("SELECT * FROM pest_reports WHERE phone = ? ORDER BY id DESC LIMIT 20", f.phone))
       .map((r) => ({ ...r, symptoms: JSON.parse(r.symptoms) }));
-    const questions = await db.all("SELECT id, body, kind, status, answer, created_at, answered_at, client_id FROM questions WHERE phone = ? ORDER BY id DESC LIMIT 20", f.phone);
+    const questions = (await db.all("SELECT id, body, kind, status, answer, created_at, answered_at, client_id, EXISTS (SELECT 1 FROM question_photos p WHERE p.question_id = questions.id) AS has_photo FROM questions WHERE phone = ? ORDER BY id DESC LIMIT 20", f.phone))
+      .map((q) => ({ ...q, has_photo: !!Number(q.has_photo), status: q.status === "escalated" ? "open" : q.status }));
     res.json({
       farmer: f,
       date: ctx.now().toISOString().slice(0, 10),
@@ -125,14 +126,17 @@ export function farmerRoutes(app, ctx, { exposeDevCode = false } = {}) {
   app.post("/api/me/questions", auth, registered, async (req, res) => {
     const clientId = cleanClientId(req.body?.client_id);
     const body = typeof req.body?.body === "string" ? req.body.body.trim().slice(0, 500) : "";
-    if (!body) throw new ValidationError(["body: write your question"]);
+    // kind: text (default), photo (a picture, with or without words) or callback (please phone me).
+    const callback = req.body?.kind === "callback";
+    const photo = !callback && req.body?.photo ? cleanPhoto(req.body.photo) : null;
+    if (!body && !photo && !callback) throw new ValidationError(["body: write your question or add a photo"]);
     const existing = async () => {
       const row = clientId && (await db.get("SELECT id FROM questions WHERE phone = ? AND client_id = ?", req.phone, clientId));
       return row ? res.status(200).json({ question: await getQuestion(db, row.id), duplicate: true }) : null;
     };
     if (await existing()) return;
     try {
-      const q = await createQuestion(db, { farmer: req.farmer, kind: "text", body, channel: "app", clientId });
+      const q = await createQuestion(db, { farmer: req.farmer, kind: callback ? "callback" : photo ? "photo" : "text", body: body || null, channel: "app", clientId, photo });
       res.status(201).json({ question: q });
     } catch (err) {
       if (isUniqueViolation(err) && (await existing())) return;

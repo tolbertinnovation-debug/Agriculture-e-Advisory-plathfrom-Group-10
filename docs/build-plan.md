@@ -176,6 +176,16 @@ Pest Doctor on USSD and in the app, officer verification, automatic hotspots and
 | S3.2 | Advisory channels: SMS and/or **App only** (shown on the farmer app, no SMS cost); voice is refused until it exists | ✅ Done |
 | S3.3 | Hotspot SMS alerts: when a hotspot appears or gets worse (Watch → Warning → Outbreak), the county's officers and admins with a phone get one SMS; also after an officer corrects a pest. Officers set their own alert phone on the Staff page | ✅ Done |
 
+### Phase 2 · Sprint 4: questions and offline
+
+Text questions (SMS `ASK`, `*347#` → 5, the app), call-backs on `*347#` and the offline outbox with duplicate-free sync were built during the hackathon. This sprint adds:
+
+| # | Work | Status |
+|---|---|---|
+| S4.1 | Ask an Expert in the app: **add a photo** (shrunk on the phone to about 1024 px, kept offline until sent) and **"Ask an officer to call me"**; officers see the photo on the dashboard; photos are checked to be real JPEG/PNG/WebP pictures under 600 KB | ✅ Done |
+| S4.2 | **Routing**: each question goes to one officer: one who covers the farmer's district first, then the least busy officer in the county. Dashboard shows who has it, "Mine only" filter, "Take it"; admins can hand questions on | ✅ Done |
+| S4.3 | **24-hour escalation**: an unanswered question is marked "Over 24h" and moved to the top; the county's officers and admins with an alert phone get an SMS and the farmer is told they are not forgotten. Checked every minute, once per question | ✅ Done |
+
 **Sprint 2 is done.** The platform is ready for the 30–50 farmer field test. Still needed from outside the code: an SMS/USSD account for the real-phone test (Sprint 1, item 2.4) and an agronomist's review of the content.
 
 ## Next 7 days

@@ -7,6 +7,7 @@
 //   - never to farmers who said STOP; nothing between seasons.
 // Liberia uses GMT all year, so UTC times are local times.
 import { runFeedbackJob, feedbackRunDue } from "./fieldTest.js";
+import { escalateOverdue } from "./questions.js";
 import { adviceForFarmer } from "./engine.js";
 import { sendSms, deliverQueued, requeueStuck } from "./messaging.js";
 import { getFarmer } from "./farmers.js";
@@ -148,6 +149,10 @@ export async function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs 
         if (scheduler && (await feedbackRunDue(ctx.db, ctx.now(), adviceHour))) {
           const f = await runFeedbackJob(ctx);
           if (f.asked) log.log(`"Did it help?" SMS sent about ${f.asked} pest report(s).`);
+        }
+        if (scheduler) {
+          const e = await escalateOverdue(ctx); // checked every minute
+          if (e.escalated) log.log(`${e.escalated} question(s) waited over 24 hours: escalated.`);
         }
       } catch (err) {
         await recordError(ctx.db, err, { job: "advice" });

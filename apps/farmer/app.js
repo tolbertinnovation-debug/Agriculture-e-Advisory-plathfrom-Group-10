@@ -34,6 +34,8 @@ const state = {
   prices: store.get("prices", {}),  // market id -> last price list (offline copy)
   market: store.get("market"),      // market chosen on the Prices screen
   error: null,
+  notice: null,                     // a short "done" message on the current screen
+  photo: null,                      // photo picked for the next question (a small JPEG data URL)
   busy: false
 };
 const save = () => { store.set("home", state.home); store.set("content", state.content); store.set("outbox", state.outbox); store.set("prices", state.prices); store.set("market", state.market); };
@@ -111,6 +113,26 @@ async function sync() {
   } finally {
     syncing = false;
     render();
+  }
+}
+
+// ---------------------------------------------------------------- photos
+/**
+ * Make a phone photo small enough to send over a weak signal and keep offline:
+ * at most 1024 px on the long side, JPEG quality 0.7 (about 60-200 KB).
+ */
+async function shrinkPhoto(file, maxSide = 1024, quality = 0.7) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => fail(new Error("This file is not a picture.")); i.src = url; });
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = Object.assign(document.createElement("canvas"), { width: Math.round(img.naturalWidth * scale), height: Math.round(img.naturalHeight * scale) });
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    let data = canvas.toDataURL("image/jpeg", quality);
+    if (data.length > 700000) data = canvas.toDataURL("image/jpeg", 0.5); // very detailed photo: squeeze harder
+    return data;
+  } finally {
+    URL.revokeObjectURL(url);
   }
 }
 
@@ -303,17 +325,25 @@ const screens = {
 
   ask() {
     appbar("Ask an Expert", true);
-    const waiting = state.outbox.filter((o) => o.type === "question").map((o) => ({ body: o.payload.body, waiting: true }));
-    const qs = [...waiting, ...(state.home?.questions ?? []).filter((q) => q.kind !== "callback")];
+    const waiting = state.outbox.filter((o) => o.type === "question")
+      .map((o) => ({ body: o.payload.body, kind: o.payload.kind ?? (o.payload.photo ? "photo" : "text"), photo: o.payload.photo, waiting: true }));
+    const qs = [...waiting, ...(state.home?.questions ?? [])];
+    const title = (q) => q.kind === "callback" ? "📞 You asked an officer to call you" : q.body ? esc(q.body) : "📷 Photo";
     return `
       ${errBox()}
+      ${state.notice ? `<div class="card notice">${esc(state.notice)}</div>` : ""}
       <form data-form="ask" class="card" style="display:flex;flex-direction:column;gap:10px">
-        <label class="field">Your question<textarea name="body" rows="3" maxlength="500" required placeholder="My pepper leaves are turning yellow…" style="font:inherit;padding:10px;border-radius:12px;border:1px solid var(--line)"></textarea></label>
+        <label class="field">Your question<textarea name="body" rows="3" maxlength="500" placeholder="My pepper leaves are turning yellow…" style="font:inherit;padding:10px;border-radius:12px;border:1px solid var(--line)"></textarea></label>
+        ${state.photo
+          ? `<div class="photo-pick"><img src="${state.photo}" alt="Your photo"><button type="button" class="link" data-action="remove-photo">Remove photo</button></div>`
+          : `<label class="btn ghost photo-btn">📷 Add a photo of the problem<input type="file" accept="image/*" capture="environment" data-action="photo" hidden></label>`}
         <button class="btn">Send to an extension officer</button>
-        <small class="muted">The answer comes here and by SMS.</small>
+        <small class="muted">The answer comes here and by SMS. A photo helps the officer see the problem.</small>
       </form>
-      ${qs.map((q) => `<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14.5px">${esc(q.body)}</b>
-        <span class="status st-${q.waiting ? "waiting" : q.status}">${q.waiting ? "Waiting to send" : q.status === "answered" ? "Answered" : "With officer"}</span></div>
+      <button class="btn ghost" data-action="callback" style="width:100%;margin-bottom:12px">📞 Ask an officer to call me (free)</button>
+      ${qs.map((q) => `<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14.5px">${title(q)}</b>
+        <span class="status st-${q.waiting ? "waiting" : q.status}">${q.waiting ? "Waiting to send" : q.status === "answered" ? (q.kind === "callback" ? "Called" : "Answered") : "With officer"}</span></div>
+        ${q.photo ? `<img class="q-photo" src="${q.photo}" alt="">` : q.has_photo ? `<div class="muted" style="font-size:13px;margin-top:4px">📷 Photo sent</div>` : ""}
         ${q.answer ? `<div class="answer-box">👩🏾‍🌾 ${esc(q.answer)}</div>` : ""}</div>`).join("")}`;
   },
 
@@ -386,8 +416,10 @@ const forms = {
   },
   ask: (fd) => {
     const body = String(fd.get("body") ?? "").trim();
-    if (!body) return;
-    state.outbox.push({ type: "question", payload: { body, client_id: newId() }, at: new Date().toISOString() });
+    if (!body && !state.photo) { state.error = "Write your question or add a photo."; return render(); }
+    state.outbox.push({ type: "question", payload: { body: body || undefined, photo: state.photo ?? undefined, client_id: newId() }, at: new Date().toISOString() });
+    state.photo = null; state.error = null;
+    state.notice = online() ? "Sent to an extension officer." : "Saved. It will be sent when you have network.";
     save(); render(); sync();
   }
 };
@@ -402,7 +434,7 @@ document.addEventListener("submit", (e) => {
 document.addEventListener("click", (e) => {
   const go = e.target.closest("[data-go]")?.dataset.go;
   if (go) {
-    state.screen = go; state.error = null; if (go !== "pest") state.lastResult = null; render();
+    state.screen = go; state.error = null; state.notice = null; if (go !== "pest") state.lastResult = null; render();
     if (go === "home" || go === "ask" || go === "reports" || go === "weather") refreshHome().then(render);
     if (go === "prices" && (state.market ?? state.content?.markets?.[0]?.id)) loadPrices(state.market ?? state.content.markets[0].id).then(render);
     return;
@@ -410,10 +442,23 @@ document.addEventListener("click", (e) => {
   const action = e.target.closest("[data-action]")?.dataset.action;
   if (action === "change-phone") { state.pendingPhone = null; state.error = null; render(); }
   if (action === "signout") signOut();
+  if (action === "remove-photo") { state.photo = null; render(); }
+  if (action === "callback") {
+    if (state.outbox.some((o) => o.payload.kind === "callback")) { state.notice = "Your call-back request is already waiting to be sent."; return render(); }
+    state.outbox.push({ type: "question", payload: { kind: "callback", client_id: newId() }, at: new Date().toISOString() });
+    state.notice = "An officer will call you, free of charge.";
+    save(); render(); sync();
+  }
 });
 
 document.addEventListener("change", async (e) => {
   const action = e.target.dataset.action;
+  if (action === "photo") {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try { state.photo = await shrinkPhoto(file); state.error = null; } catch (err) { state.error = err.message; }
+    return render();
+  }
   if (action === "market") { state.market = e.target.value; save(); render(); await loadPrices(state.market); render(); return; }
   if (action !== "language" && action !== "sms") return;
   try {

@@ -84,6 +84,7 @@
           <label class="field">Name<input name="name" required maxlength="80"></label>
           <label class="field">Email<input type="email" name="email" required></label>
         </div>
+        <label class="field">Districts this officer covers first (optional, e.g. Salala, Zota): farmers' questions from there go to them<input name="districts" placeholder="Salala, Zota"></label>
         <label class="field">Phone for hotspot alerts (optional)<input name="phone" inputmode="tel" placeholder="e.g. 0886 123 456"></label>
         <label class="field">Role
           <select name="role">
@@ -181,11 +182,12 @@ function showOnce(label, email, password) {
 
 async function renderStaff() {
   const list = await api("GET", "/api/staff");
-  $("#staffTable").innerHTML = `<tr><th>Name</th><th>Role</th><th>Counties</th><th>Alert phone</th><th>2-step</th><th>Last login</th><th>Status</th><th></th></tr>` +
+  $("#staffTable").innerHTML = `<tr><th>Name</th><th>Role</th><th>Counties</th><th>Districts first</th><th>Alert phone</th><th>2-step</th><th>Last login</th><th>Status</th><th></th></tr>` +
     list.map((s) => `<tr>
       <td><b>${esc(s.name)}</b><div class="muted">${esc(s.email)}</div></td>
       <td><select data-role="${s.id}" ${s.id === me.id ? "disabled" : ""}>${["admin", "officer", "editor", "viewer", "lead"].map((r) => `<option ${r === s.role ? "selected" : ""}>${r}</option>`).join("")}</select></td>
       <td>${s.role === "officer" || s.role === "lead" ? `<input data-counties="${s.id}" value="${esc(s.counties.join(", "))}" style="width:170px">` : '<span class="muted">all</span>'}</td>
+      <td>${s.role === "officer" ? `<input data-districts="${s.id}" value="${esc((s.districts ?? []).join(", "))}" placeholder="e.g. Salala, Zota" style="width:150px">` : '<span class="muted">–</span>'}</td>
       <td><input data-phone="${s.id}" value="${esc(s.phone ?? "")}" placeholder="none" style="width:130px" ${s.id === me.id ? "disabled" : ""}></td>
       <td><span class="status ${s.two_factor ? "on" : "grey"}">${s.two_factor ? "ON" : "off"}</span></td>
       <td>${esc(when(s.last_login_at))}</td>
@@ -207,7 +209,9 @@ $("#staffTable").onclick = async (e) => {
       const box = document.querySelector(`[data-counties="${id}"]`);
       const counties = box ? box.value.split(",").map((c) => c.trim()).filter(Boolean) : undefined;
       const phone = document.querySelector(`[data-phone="${id}"]`).value;
-      await api("PATCH", `/api/staff/${id}`, { role, phone, ...(counties ? { counties } : {}) });
+      const dbox = document.querySelector(`[data-districts="${id}"]`);
+      const districts = dbox ? dbox.value.split(",").map((d) => d.trim()).filter(Boolean) : undefined;
+      await api("PATCH", `/api/staff/${id}`, { role, phone, ...(counties ? { counties } : {}), ...(districts ? { districts } : {}) });
       toast("Saved.");
     }
     if (b.dataset.reset && confirm(`Reset the password for ${b.dataset.email}? Their 2-step login is also reset.`)) {
@@ -237,7 +241,7 @@ $("#addForm").onsubmit = async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
   try {
-    const r = await api("POST", "/api/staff", { name: fd.get("name"), email: fd.get("email"), role: fd.get("role"), counties: fd.getAll("county"), phone: fd.get("phone") });
+    const r = await api("POST", "/api/staff", { name: fd.get("name"), email: fd.get("email"), role: fd.get("role"), counties: fd.getAll("county"), phone: fd.get("phone"), districts: String(fd.get("districts") ?? "").split(",").map((d) => d.trim()).filter(Boolean) });
     showOnce("Account created. First password", r.staff.email, r.password);
     e.target.reset(); $("#addMsg").textContent = "";
     await renderStaff(); await renderAudit();
