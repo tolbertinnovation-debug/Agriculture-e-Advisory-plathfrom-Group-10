@@ -86,7 +86,7 @@ test("normal mode: production rules (no sign-in codes on screen); demo mode show
 
   const demo = await serve({ DEMO_MODE: "1" });
   try {
-    assert.equal((await demo.call("GET", "/")).headers.get("location"), "/prototype/dashboard.html");
+    assert.equal((await demo.call("GET", "/")).headers.get("location"), "/app/");
     assert.equal((await demo.call("GET", "/health")).body.demo, true);
     assert.match((await demo.call("POST", "/api/auth/request-code", { phone: "0777000001" })).body.dev_code, /^\d{6}$/);
     assert.equal((await demo.call("GET", "/api/messages?phone=0777000001")).status, 200);

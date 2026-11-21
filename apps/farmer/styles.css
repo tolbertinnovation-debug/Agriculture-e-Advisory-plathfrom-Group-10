@@ -228,3 +228,16 @@ td.num { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums
 .notice { display: flex; align-items: center; gap: 8px; }
 th { font-weight: 650; }
 td.num { font-weight: 700; }
+
+/* ---------- one simple entrance: log in or sign up ---------- */
+.steps { display: flex; justify-content: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.steps span { padding: 4px 10px; border-radius: 999px; background: #ECEFEB; }
+.steps span.on { background: var(--forest); color: #fff; }
+.steps span.done { background: var(--leaf-soft); color: var(--forest); }
+.content a { color: var(--forest); font-weight: 600; }
+.pill .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #7BD69A; margin-right: 5px; vertical-align: 1px; }
+.task { border-top: 1px solid var(--line-2); padding: 10px 0; line-height: 1.4; }
+.task:first-of-type { border-top: 0; }
+.task .tag { margin-right: 4px; }
+.card h3 + .task { padding-top: 4px; }
+.tag { white-space: nowrap; }
