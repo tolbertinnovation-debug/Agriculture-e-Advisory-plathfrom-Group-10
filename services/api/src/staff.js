@@ -10,7 +10,7 @@
 //            confirms by replying YES) and sees only the registrations they made
 import { scryptSync, randomBytes, timingSafeEqual, createHash, createHmac } from "node:crypto";
 import { ValidationError } from "./farmers.js";
-import { findCounty } from "./geo.js";
+import { findCounty, normalizePhone } from "./geo.js";
 
 export const ROLES = ["admin", "officer", "editor", "viewer", "lead"];
 /** Roles that only work in their own counties. */
@@ -107,6 +107,14 @@ export function checkTotp(secretBase32, code, now) {
 }
 
 // ---------------------------------------------------------------- accounts
+/** Optional mobile number for alerts by SMS. "" or null clears it. */
+function cleanStaffPhone(phone) {
+  if (phone === undefined || phone === null || String(phone).trim() === "") return null;
+  const p = normalizePhone(phone);
+  if (!p) throw new ValidationError(["phone: not a valid Liberian mobile number"]);
+  return p;
+}
+
 function cleanCounties(list, role) {
   const counties = [];
   for (const c of list ?? []) {
@@ -119,11 +127,11 @@ function cleanCounties(list, role) {
 }
 
 const publicStaff = (row) => row && ({
-  id: row.id, email: row.email, name: row.name, role: row.role, counties: JSON.parse(row.counties),
+  id: row.id, email: row.email, name: row.name, role: row.role, counties: JSON.parse(row.counties), phone: row.phone ?? null,
   two_factor: !!row.totp_enabled, active: !!row.active, last_login_at: row.last_login_at, created_at: row.created_at
 });
 
-export async function createStaff(db, { email, name, role, counties, password }) {
+export async function createStaff(db, { email, name, role, counties, password, phone }) {
   const errors = [];
   const mail = typeof email === "string" ? email.trim().toLowerCase() : "";
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) errors.push("email: enter a valid email address");
@@ -131,11 +139,12 @@ export async function createStaff(db, { email, name, role, counties, password })
   if (typeof name !== "string" || !name.trim()) errors.push("name: required");
   if (errors.length) throw new ValidationError(errors);
   const list = cleanCounties(counties, role);
+  const mobile = cleanStaffPhone(phone);
   const pw = password ?? generatePassword();
   if (pw.length < PASSWORD_MIN) throw new ValidationError([`password: at least ${PASSWORD_MIN} characters`]);
   if (await db.get("SELECT 1 AS x FROM staff WHERE email = ?", mail)) throw new ValidationError(["email: an account with this email already exists"]);
-  const { id } = await db.get("INSERT INTO staff (email, name, role, counties, password_hash) VALUES (?, ?, ?, ?, ?) RETURNING id",
-    mail, name.trim().slice(0, 80), role, JSON.stringify(list), hashPassword(pw));
+  const { id } = await db.get("INSERT INTO staff (email, name, role, counties, password_hash, phone) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+    mail, name.trim().slice(0, 80), role, JSON.stringify(list), hashPassword(pw), mobile);
   return { staff: await getStaff(db, id), password: pw };
 }
 
@@ -146,14 +155,15 @@ export async function listStaff(db) {
   return (await db.all("SELECT * FROM staff ORDER BY active DESC, role, name, id")).map(publicStaff);
 }
 
-export async function updateStaff(db, id, { name, role, counties, active }) {
+export async function updateStaff(db, id, { name, role, counties, active, phone }) {
   const row = await db.get("SELECT * FROM staff WHERE id = ?", id);
   if (!row) return null;
   const nextRole = role ?? row.role;
   if (!ROLES.includes(nextRole)) throw new ValidationError([`role: one of ${ROLES.join(", ")}`]);
   const list = counties !== undefined || role !== undefined ? cleanCounties(counties ?? JSON.parse(row.counties), nextRole) : JSON.parse(row.counties);
-  await db.run("UPDATE staff SET name = ?, role = ?, counties = ?, active = ? WHERE id = ?",
-    typeof name === "string" && name.trim() ? name.trim().slice(0, 80) : row.name, nextRole, JSON.stringify(list), active === undefined ? row.active : active ? 1 : 0, id);
+  const mobile = phone === undefined ? row.phone : cleanStaffPhone(phone);
+  await db.run("UPDATE staff SET name = ?, role = ?, counties = ?, active = ?, phone = ? WHERE id = ?",
+    typeof name === "string" && name.trim() ? name.trim().slice(0, 80) : row.name, nextRole, JSON.stringify(list), active === undefined ? row.active : active ? 1 : 0, mobile, id);
   if (active === false) await db.run("DELETE FROM staff_sessions WHERE staff_id = ?", id); // log them out everywhere
   return getStaff(db, id);
 }

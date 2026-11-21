@@ -331,6 +331,30 @@ CREATE TABLE IF NOT EXISTS feedback_requests (
 CREATE INDEX IF NOT EXISTS idx_feedback_phone ON feedback_requests(phone, asked_at);
 `, t.dialect));
     }
+  },
+  {
+    version: 4,
+    name: "pest loop: delivery per advisory, officer phones, hotspot alerts",
+    async up(t) {
+      // Which advisory an SMS belongs to, so each advisory shows sent / delivered / failed.
+      await t.exec("ALTER TABLE message_log ADD COLUMN broadcast_id INTEGER");
+      // Officers' phones, for hotspot alerts by SMS.
+      await t.exec("ALTER TABLE staff ADD COLUMN phone TEXT");
+      await t.exec(fill(`
+CREATE INDEX IF NOT EXISTS idx_message_broadcast ON message_log(broadcast_id, status);
+-- One alert per pest, county and level, so officers are told when a hotspot appears or gets worse, not on every report.
+CREATE TABLE IF NOT EXISTS hotspot_alerts (
+  id          {{ID}},
+  pest        TEXT NOT NULL,
+  county      TEXT NOT NULL,
+  level       TEXT NOT NULL,                       -- Watch | Warning | Outbreak
+  reports     INTEGER NOT NULL,
+  sent_to     INTEGER NOT NULL DEFAULT 0,          -- officers who got the SMS
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_hotspot_alerts ON hotspot_alerts(pest, county, level, created_at);
+`, t.dialect));
+    }
   }
 ];
 
@@ -353,7 +377,7 @@ export async function migrate(db) {
 export const TABLES = [
   "farmers", "farmer_crops", "pest_reports", "questions", "broadcasts", "message_log", "advice_sends", "job_runs",
   "otp_codes", "farmer_sessions", "weather_forecasts", "weather_alerts", "market_reporters", "prices",
-  "staff", "staff_sessions", "audit_log", "backups", "error_log", "registrations", "ussd_signups", "feedback_requests"
+  "staff", "staff_sessions", "audit_log", "backups", "error_log", "registrations", "ussd_signups", "feedback_requests", "hotspot_alerts"
 ];
 
 // ---------------------------------------------------------------- SQLite

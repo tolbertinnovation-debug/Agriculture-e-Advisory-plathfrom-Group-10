@@ -41,6 +41,11 @@ Everyone who uses the dashboard has their own account. `npm run seed` creates th
 
 **Assisted sign-up.** Officers and lead farmers register farmers on the dashboard (*Register a farmer*). The farmer gets an SMS and **joins only when they reply YES** (or answer the first `*347#` screen). NO, or no answer within 7 days, means nothing is kept. Invitations can be resent at most twice. Only admins can add farmers directly (`POST /api/farmers`, e.g. from signed paper forms).
 
+**Pest loop (Sprint 3).**
+- **Hotspot alerts by SMS.** When a pest report makes a hotspot appear, or raises it from Watch (3+ reports) to Warning (5+) or Outbreak (10+), the officers for that county and the admins get one SMS, if they have an alert phone: *AgriConnect new hotspot: Fall armyworm in Nimba, 3 reports in 7 days. Check the dashboard and warn farmers.* No repeat for the same level within 7 days. Officers add their phone on *Staff & security* → *My phone for alerts*; admins can set it for anyone. The hotspot list shows "📱 1 officer texted". The demo officer Mulbah has the phone 0886000099: see the alert in the message log.
+- **Delivery per advisory.** Under each sent advisory: SMS delivered, sent, waiting, failed, and the delivery rate once delivery reports come back from the SMS provider.
+- **App-only advisories.** Untick SMS to post an advisory on the farmer app's home screen only, at no SMS cost. Every advisory appears in the app.
+
 **Field-test measures** (dashboard card *Field test*, for the MVP exit criteria):
 - **Sign-up completion on `*347#`.** Every phone that starts registering is followed screen by screen. Finished ÷ (finished + cancelled + gave up) is the completion rate; the target is 80%. Someone silent for 10 minutes has given up, and the card shows at which screen (language, county, crop, planting month, consent). People dialling right now are not counted yet.
 - **"Did it help?"** Each day, with the advice job, farmers who reported a pest 3–10 days ago get one SMS: *Did our advice for Fall armyworm (PR-12) help? Reply 1 = Yes, 2 = No.* Only registered farmers who haven't said STOP, never about rejected reports, once per report and at most once a week per farmer. **2 (No) puts a call-back request in the officer's question queue**, so the farmer gets help. Answers are shown by pest, so the content team sees which advice works.
@@ -225,6 +230,8 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | GET 🔒 | `/api/pest-reports?county=&status=` | List reports for officers |
 | GET 🔒 | `/api/pest-reports/:id` | One report |
 | GET 🔒 | `/api/stats` | Numbers for the dashboard |
+| GET 🔒 | `/api/hotspots/alerts` | SMS alerts sent to officers about hotspots (officers: their counties) |
+| POST 🔒 | `/api/staff/me/phone` | `{phone}`: your own phone for hotspot alerts (`""` removes it) |
 | GET 🔒 | `/api/field-test?days=30` | Field-test measures: `*347#` sign-up completion (target 80%) with where people stopped, and "Did it help?" answers by pest |
 | POST | `/ussd` | USSD gateway webhook (`phoneNumber`, `text`) → `CON …` / `END …` |
 | POST | `/sms/inbound` | Incoming SMS (`from`, `text`): HELP, ASK, STOP, START, 1 / 2 (answers to "Did it help?") |
@@ -234,8 +241,8 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | PATCH 🔒 | `/api/questions/:id` | `{answer, answered_by}`; the answer goes to the farmer by SMS (max 139 chars) |
 | GET 🔒 | `/api/hotspots?county=&days=7` | Pests reported 3+ times in one county |
 | POST 🔒 | `/api/broadcasts/preview` | `{counties, crops}` → how many farmers it would reach |
-| POST 🔒 | `/api/broadcasts` | `{counties, crops, channels, message}` → sends the SMS |
-| GET 🔒 | `/api/broadcasts` | Advisories already sent |
+| POST 🔒 | `/api/broadcasts` | `{counties, crops, channels: ["sms", "app"], message}`: SMS to every matching farmer and/or the farmer app only |
+| GET 🔒 | `/api/broadcasts` | Advisories already sent, each with its SMS delivery (`sms.delivered`, `sms.failed`, `sms.delivery_rate`) |
 | GET 🔒 | `/api/jobs` | Daily advice schedule, last runs, SMS queue counts |
 | POST 🔒 | `/api/jobs/advice/run` | `{dry_run: true}` to preview, `{}` to send due advice now |
 | POST 🔒 | `/api/jobs/feedback/run` | Send the "Did it help?" SMS now (`{dry_run: true}` to preview); it also runs daily with the advice job |

@@ -54,6 +54,12 @@
           <button class="act" style="align-self:flex-start">Change password</button>
           <p class="msg" id="pwMsg"></p>
         </form>
+        <h3 style="margin-top:8px">My phone for alerts</h3>
+        <form id="phoneForm" class="stack">
+          <label class="field">Officers get an SMS when a pest hotspot appears or gets worse in their counties. Leave empty for no SMS.<input name="phone" inputmode="tel" placeholder="e.g. 0886 123 456"></label>
+          <button class="act" style="align-self:flex-start">Save phone</button>
+          <p class="msg" id="phoneMsg"></p>
+        </form>
       </div>
 
       <div class="card stack" id="security">
@@ -78,6 +84,7 @@
           <label class="field">Name<input name="name" required maxlength="80"></label>
           <label class="field">Email<input type="email" name="email" required></label>
         </div>
+        <label class="field">Phone for hotspot alerts (optional)<input name="phone" inputmode="tel" placeholder="e.g. 0886 123 456"></label>
         <label class="field">Role
           <select name="role">
             <option value="officer">Officer: reports, questions and advisories for their counties</option>
@@ -121,6 +128,7 @@ const when = (iso) => (iso ? iso.replace("T", " ").slice(0, 16) : "never");
 
 // ---------------- my account ----------------
 function renderMe() {
+  $("#phoneForm").phone.value = me.phone ?? "";
   $("#meInfo").innerHTML = `<b>${esc(me.name)}</b> · ${esc(me.email)}<br>Role: <b>${esc(me.role)}</b>${me.counties.length ? ` · Counties: ${esc(me.counties.join(", "))}` : ""}`;
   $("#mfa").innerHTML = me.two_factor
     ? `<p><span class="status on">ON</span> Your account is protected with 2-step login.</p>
@@ -173,11 +181,12 @@ function showOnce(label, email, password) {
 
 async function renderStaff() {
   const list = await api("GET", "/api/staff");
-  $("#staffTable").innerHTML = `<tr><th>Name</th><th>Role</th><th>Counties</th><th>2-step</th><th>Last login</th><th>Status</th><th></th></tr>` +
+  $("#staffTable").innerHTML = `<tr><th>Name</th><th>Role</th><th>Counties</th><th>Alert phone</th><th>2-step</th><th>Last login</th><th>Status</th><th></th></tr>` +
     list.map((s) => `<tr>
       <td><b>${esc(s.name)}</b><div class="muted">${esc(s.email)}</div></td>
       <td><select data-role="${s.id}" ${s.id === me.id ? "disabled" : ""}>${["admin", "officer", "editor", "viewer", "lead"].map((r) => `<option ${r === s.role ? "selected" : ""}>${r}</option>`).join("")}</select></td>
       <td>${s.role === "officer" || s.role === "lead" ? `<input data-counties="${s.id}" value="${esc(s.counties.join(", "))}" style="width:170px">` : '<span class="muted">all</span>'}</td>
+      <td><input data-phone="${s.id}" value="${esc(s.phone ?? "")}" placeholder="none" style="width:130px" ${s.id === me.id ? "disabled" : ""}></td>
       <td><span class="status ${s.two_factor ? "on" : "grey"}">${s.two_factor ? "ON" : "off"}</span></td>
       <td>${esc(when(s.last_login_at))}</td>
       <td><span class="status ${s.active ? "on" : "off"}">${s.active ? "active" : "switched off"}</span></td>
@@ -197,7 +206,8 @@ $("#staffTable").onclick = async (e) => {
       const role = document.querySelector(`[data-role="${id}"]`).value;
       const box = document.querySelector(`[data-counties="${id}"]`);
       const counties = box ? box.value.split(",").map((c) => c.trim()).filter(Boolean) : undefined;
-      await api("PATCH", `/api/staff/${id}`, { role, ...(counties ? { counties } : {}) });
+      const phone = document.querySelector(`[data-phone="${id}"]`).value;
+      await api("PATCH", `/api/staff/${id}`, { role, phone, ...(counties ? { counties } : {}) });
       toast("Saved.");
     }
     if (b.dataset.reset && confirm(`Reset the password for ${b.dataset.email}? Their 2-step login is also reset.`)) {
@@ -212,12 +222,22 @@ $("#staffTable").onclick = async (e) => {
   } catch (ex) { if (!ex.login) toast(ex.message, true); }
 };
 
+$("#phoneForm").onsubmit = async (e) => {
+  e.preventDefault();
+  try {
+    const r = await api("POST", "/api/staff/me/phone", { phone: new FormData(e.target).get("phone") });
+    me.phone = r.phone;
+    e.target.phone.value = r.phone ?? "";
+    $("#phoneMsg").className = "msg"; $("#phoneMsg").textContent = r.phone ? `Saved. Hotspot alerts go to ${r.phone}.` : "Removed. You will not get alerts by SMS.";
+  } catch (ex) { if (!ex.login) { $("#phoneMsg").className = "msg bad"; $("#phoneMsg").textContent = ex.message; } }
+};
+
 $("#countyBoxes").innerHTML = COUNTIES.map((c) => `<label><input type="checkbox" name="county" value="${c}"> ${c}</label>`).join("");
 $("#addForm").onsubmit = async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
   try {
-    const r = await api("POST", "/api/staff", { name: fd.get("name"), email: fd.get("email"), role: fd.get("role"), counties: fd.getAll("county") });
+    const r = await api("POST", "/api/staff", { name: fd.get("name"), email: fd.get("email"), role: fd.get("role"), counties: fd.getAll("county"), phone: fd.get("phone") });
     showOnce("Account created. First password", r.staff.email, r.password);
     e.target.reset(); $("#addMsg").textContent = "";
     await renderStaff(); await renderAudit();

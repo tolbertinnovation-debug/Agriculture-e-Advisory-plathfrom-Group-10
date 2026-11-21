@@ -37,6 +37,25 @@ for (const f of farmers) {
   added++;
 }
 
+// Demo staff accounts for the dashboard (made before the demo reports, so the Nimba hotspot alert reaches Officer Mulbah) (LOCAL DEMO ONLY: these passwords are public in this file).
+const DEMO_STAFF = [
+  { email: "admin@agriconnect.test", name: "Demo Admin", role: "admin", counties: [], password: "demo-admin-2026" },
+  { email: "mulbah@agriconnect.test", name: "Officer Mulbah", role: "officer", counties: ["Bong", "Lofa", "Nimba"], password: "demo-officer-2026", phone: "0886000099" },
+  { email: "editor@agriconnect.test", name: "Content Editor", role: "editor", counties: [], password: "demo-editor-2026" },
+  { email: "partner@agriconnect.test", name: "Partner Viewer", role: "viewer", counties: [], password: "demo-viewer-2026" },
+  { email: "kerkula@agriconnect.test", name: "Lead Farmer Kerkula", role: "lead", counties: ["Bong"], password: "demo-lead-2026" }
+];
+let staffAdded = 0;
+for (const s of DEMO_STAFF) {
+  if (await db.get("SELECT 1 AS x FROM staff WHERE email = ?", s.email)) continue;
+  await createStaff(db, s);
+  staffAdded++;
+}
+if (staffAdded) {
+  console.log("Demo dashboard logins (local demo only):");
+  for (const s of DEMO_STAFF) console.log(`  ${s.role.padEnd(8)} ${s.email.padEnd(28)} ${s.password}${s.counties.length ? `   (${s.counties.join(", ")})` : ""}`);
+}
+
 // Three fall armyworm reports in Nimba make a hotspot on the dashboard.
 const reports = [
   { phone: "0770000006", crop: "rice", symptoms: ["holes", "caterpillar"], channel: "ussd" },
@@ -82,25 +101,6 @@ if (!(await db.get("SELECT 1 AS x FROM weather_forecasts LIMIT 1"))) {
     const days = rain.map((r, n) => ({ date: day(n), rain_prob: r, rain_mm: r >= 70 ? 22 : 2, t_max: 30 + (n % 3), t_min: 23, code: r >= 70 ? 63 : 2 }));
     await db.run("INSERT INTO weather_forecasts (county, days, fetched_at) VALUES (?, ?, 'sample')", county, JSON.stringify(days));
   }
-}
-
-// Demo staff accounts for the dashboard (LOCAL DEMO ONLY: these passwords are public in this file).
-const DEMO_STAFF = [
-  { email: "admin@agriconnect.test", name: "Demo Admin", role: "admin", counties: [], password: "demo-admin-2026" },
-  { email: "mulbah@agriconnect.test", name: "Officer Mulbah", role: "officer", counties: ["Bong", "Lofa", "Nimba"], password: "demo-officer-2026" },
-  { email: "editor@agriconnect.test", name: "Content Editor", role: "editor", counties: [], password: "demo-editor-2026" },
-  { email: "partner@agriconnect.test", name: "Partner Viewer", role: "viewer", counties: [], password: "demo-viewer-2026" },
-  { email: "kerkula@agriconnect.test", name: "Lead Farmer Kerkula", role: "lead", counties: ["Bong"], password: "demo-lead-2026" }
-];
-let staffAdded = 0;
-for (const s of DEMO_STAFF) {
-  if (await db.get("SELECT 1 AS x FROM staff WHERE email = ?", s.email)) continue;
-  await createStaff(db, s);
-  staffAdded++;
-}
-if (staffAdded) {
-  console.log("Demo dashboard logins (local demo only):");
-  for (const s of DEMO_STAFF) console.log(`  ${s.role.padEnd(8)} ${s.email.padEnd(28)} ${s.password}${s.counties.length ? `   (${s.counties.join(", ")})` : ""}`);
 }
 
 console.log(`Seeded ${added} new farmers${added ? `, ${reports.length} pest reports and 3 questions` : " (demo data already present)"}${prices ? `, ${prices} sample prices` : ""}.`);

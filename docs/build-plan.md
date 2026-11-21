@@ -166,6 +166,16 @@ Most of the original Sprint 2 list (USSD and app sign-up, consent, STOP, daily a
 | S2.3 | `*347#` → 6 My profile → 2 My crops & planting: change a planting month, add a crop, remove a crop (with a check); new advice is sent at once if a stage is due; officers see the change in the farmer's history | ✅ Done |
 | S2.4 | Field-test measures: `*347#` sign-up completion rate against the 80% exit criterion, with the screen where people stop; "Did it help? 1 = Yes, 2 = No" SMS 3 days after a pest report (a No becomes a call-back for the officer); results by pest on a dashboard *Field test* card | ✅ Done |
 
+### Phase 2 · Sprint 3: the pest loop, end to end
+
+Pest Doctor on USSD and in the app, officer verification, automatic hotspots and broadcasts by county and crop were built during the hackathon. This sprint closes the gaps.
+
+| # | Work | Status |
+|---|---|---|
+| S3.1 | Delivery report for every advisory: SMS waiting, sent, delivered, failed and the delivery rate (MVP target: 95%) | ✅ Done |
+| S3.2 | Advisory channels: SMS and/or **App only** (shown on the farmer app, no SMS cost); voice is refused until it exists | ✅ Done |
+| S3.3 | Hotspot SMS alerts: when a hotspot appears or gets worse (Watch → Warning → Outbreak), the county's officers and admins with a phone get one SMS; also after an officer corrects a pest. Officers set their own alert phone on the Staff page | ✅ Done |
+
 **Sprint 2 is done.** The platform is ready for the 30–50 farmer field test. Still needed from outside the code: an SMS/USSD account for the real-phone test (Sprint 1, item 2.4) and an agronomist's review of the content.
 
 ## Next 7 days
