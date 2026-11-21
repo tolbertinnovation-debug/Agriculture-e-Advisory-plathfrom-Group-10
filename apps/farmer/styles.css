@@ -1,25 +1,41 @@
+/* AgriConnect farmer app. Same design system as the officer portal (prototype/styles.css). */
+@font-face {
+  font-family: "Inter";
+  src: url("assets/inter-var.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
 :root {
-  --forest: #1F4D2B;
-  --leaf: #3E8E41;
-  --leaf-soft: #E3F0DF;
-  --gold: #E8B33A;
-  --gold-soft: #FBF0D3;
-  --red: #B8322F;
-  --red-soft: #F8E1DF;
-  --blue: #1E4C8A;
-  --blue-soft: #E1EAF6;
-  --ink: #17241B;
-  --muted: #5B6B60;
-  --line: #DDE3DA;
-  --paper: #F7F4EC;
-  --card: #FFFDF8;
+  --forest: #17492F;
+  --forest-2: #1F6140;
+  --leaf: #2E8B57;
+  --leaf-soft: #E6F3EA;
+  --gold: #E3A92B;
+  --gold-soft: #FCF3DC;
+  --gold-ink: #7A5508;
+  --red: #B42318;
+  --red-soft: #FDECEA;
+  --blue: #1F5FAD;
+  --blue-soft: #E8F0FA;
+  --ink: #101A14;
+  --text-2: #3D4A43;
+  --muted: #66746C;
+  --line: #E3E7E3;
+  --line-2: #EEF1EE;
+  --paper: #F5F7F4;
+  --card: #FFFFFF;
   --radius: 16px;
-  font-family: "Nunito Sans", "Segoe UI", Roboto, Arial, sans-serif;
+  --shadow-sm: 0 1px 2px rgba(16, 26, 20, .05), 0 1px 3px rgba(16, 26, 20, .05);
+  --focus: 0 0 0 3px rgba(46, 139, 87, .35);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-feature-settings: "cv11", "ss01";
   color: var(--ink);
+  -webkit-font-smoothing: antialiased;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: #DCD6C6; }
+body { margin: 0; background: #E4E8E2; line-height: 1.45; }
 button { font: inherit; cursor: pointer; }
+:focus-visible { outline: none; box-shadow: var(--focus); }
 
 /* ---------- phone frame ---------- */
 .stage { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
@@ -162,3 +178,53 @@ td.num { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums
 .q-photo { margin-top: 8px; }
 .link { background: none; border: 0; color: var(--red); font-weight: 700; cursor: pointer; padding: 0; font: inherit; }
 .notice { background: var(--leaf-soft); color: var(--forest); font-weight: 700; }
+
+/* ---------- design refresh: icons, header, tiles, tab bar ---------- */
+.i { width: 1.15em; height: 1.15em; flex: none; vertical-align: -0.2em; stroke: currentColor; fill: none; }
+.phone { border-width: 8px; border-color: #111; box-shadow: 0 30px 70px rgba(16,26,20,.28); }
+.appbar { background: linear-gradient(135deg, #123B26 0%, #1F6140 100%); padding: 14px 18px 16px; }
+.appbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+.appbar .mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: rgba(255,255,255,.14); }
+.appbar .mark .i { width: 19px; height: 19px; }
+.appbar .back { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.12); padding: 0; }
+.appbar .back .i { width: 19px; height: 19px; }
+.pill { font-weight: 600; padding: 5px 9px; }
+.content { padding: 16px; gap: 12px; }
+.card { border-color: var(--line); box-shadow: var(--shadow-sm); padding: 15px; }
+.hello { font-size: 23px; font-weight: 750; letter-spacing: -.02em; }
+.eyebrow { font-weight: 700; color: var(--leaf); margin-top: 4px; }
+.weather-hero { background: linear-gradient(135deg, #1A4F94 0%, #2F74C4 100%); box-shadow: 0 8px 20px rgba(31,95,173,.25); border-radius: 18px; padding: 16px; }
+.weather-hero .big .wx { width: 46px; height: 46px; stroke-width: 1.6; }
+.weather-hero .temp { font-size: 26px; font-weight: 750; letter-spacing: -.02em; }
+.hero-more { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 600; opacity: .9; white-space: nowrap; }
+.alert { background: #FFF7F6; border: 1px solid #F6D0CB; border-left: 4px solid var(--red); }
+.alert b { display: flex; align-items: center; gap: 6px; }
+.advice { border-left: 4px solid var(--leaf); }
+.advice .stage-name { font-weight: 700; letter-spacing: .05em; }
+.grid { gap: 10px; }
+.tile { border-radius: 16px; padding: 14px 6px 12px; font-weight: 600; font-size: 12.5px; box-shadow: var(--shadow-sm); transition: transform .1s, box-shadow .15s; }
+.tile:active { transform: scale(.97); }
+.tile .ic { display: grid; place-items: center; width: 44px; height: 44px; margin: 0 auto 8px; border-radius: 14px; background: var(--leaf-soft); color: var(--forest); font-size: inherit; }
+.tile .ic .i { width: 22px; height: 22px; }
+.tile .ic.red { background: var(--red-soft); color: var(--red); }
+.tile .ic.gold { background: var(--gold-soft); color: var(--gold-ink); }
+.tile .ic.blue { background: var(--blue-soft); color: var(--blue); }
+.tabbar { background: rgba(255,255,255,.96); backdrop-filter: blur(8px); border-top: 1px solid var(--line); padding: 4px 4px 6px; }
+.tabbar button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0 6px; font-size: 10.5px; font-weight: 600; border-radius: 12px; }
+.tabbar button .i { width: 48px; height: 28px; padding: 3px 13px; box-sizing: border-box; border-radius: 10px; }
+.tabbar button.on { color: var(--forest); }
+.tabbar button.on .i { background: var(--leaf-soft); }
+.btn { border-radius: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: background .15s; }
+.btn:hover { background: var(--forest-2); }
+.btn.ghost { background: var(--card); color: var(--forest); border: 1.5px solid #CFE3D6; }
+.btn.ghost:hover { background: var(--leaf-soft); }
+.field input[type=tel], .field input[type=text], .field input[inputmode=numeric], select, textarea { border: 1px solid #D5DBD6; border-radius: 12px; }
+.field input:focus, select:focus, textarea:focus { outline: none; border-color: var(--leaf); box-shadow: var(--focus); }
+.hero-mark { display: grid; place-items: center; width: 76px; height: 76px; margin: 8px auto 4px; border-radius: 24px; background: linear-gradient(135deg, #17492F, #2E8B57); color: #fff; box-shadow: 0 10px 24px rgba(23,73,47,.3); }
+.hero-mark .i { width: 40px; height: 40px; stroke-width: 1.7; }
+.status { border-radius: 999px; font-weight: 650; padding: 3px 9px; }
+.answer-box { background: var(--leaf-soft); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
+.answer-box b { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--forest); margin-bottom: 2px; }
+.notice { display: flex; align-items: center; gap: 8px; }
+th { font-weight: 650; }
+td.num { font-weight: 700; }

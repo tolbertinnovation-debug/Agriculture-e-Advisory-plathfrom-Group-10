@@ -6,110 +6,176 @@
 <title>AgriConnect — Extension Officer Dashboard</title>
 <link rel="stylesheet" href="styles.css">
 <style>
-  body { background: var(--paper); }
-  .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
-  aside.nav { background: var(--forest); color: #fff; padding: 22px 16px; }
-  aside.nav .logo { font-weight: 800; font-size: 19px; margin-bottom: 26px; }
-  aside.nav a { display: block; color: #DCEBD6; text-decoration: none; padding: 10px 12px; border-radius: 10px; font-weight: 700; font-size: 14px; margin-bottom: 4px; }
-  aside.nav a:hover { background: rgba(255,255,255,.1); color: #fff; }
-  main { padding: 26px 30px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .top h1 { margin: 0; font-size: 24px; }
-  .mode { font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 8px; }
-  .mode.live { background: var(--leaf-soft); color: var(--forest); }
-  .mode.demo { background: var(--gold-soft); color: #7A5A0B; }
-  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-  .kpi .v { font-size: 30px; font-weight: 800; color: var(--forest); font-variant-numeric: tabular-nums; }
-  .kpi .l { font-size: 13px; font-weight: 700; }
-  .kpi.alert .v { color: var(--red); }
-  .row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
-  .card { min-width: 0; }
-  .card h3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .scroll { overflow-x: auto; }
-  .bar { display: grid; grid-template-columns: 130px 1fr 50px; align-items: center; gap: 8px; font-size: 13px; margin: 5px 0; }
-  .bar .track { height: 12px; background: var(--leaf-soft); border-radius: 6px; overflow: hidden; }
-  .bar .track i { display: block; height: 100%; background: var(--leaf); border-radius: 6px; }
-  .bar b { text-align: right; font-variant-numeric: tabular-nums; }
-  .status { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
-  .s-new, .s-open, .l-Outbreak { background: var(--red-soft); color: var(--red); }
-  .l-Warning, .s-callback { background: var(--gold-soft); color: #7A5A0B; }
-  .s-verified, .s-answered, .l-Watch { background: var(--leaf-soft); color: var(--forest); }
-  .s-rejected, .s-closed { background: #ECEAE4; color: var(--muted); }
-  textarea, .dash select, .dash input[type=text] { width: 100%; font: inherit; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
-  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-  .chan { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
-  .chan label { font-size: 13px; font-weight: 700; display: flex; gap: 4px; align-items: center; background: var(--leaf-soft); padding: 6px 10px; border-radius: 8px; }
-  .chan label.off { background: #ECEAE4; color: var(--muted); }
-  .stack { display: flex; height: 22px; border-radius: 6px; overflow: hidden; margin: 8px 0; background: var(--leaf-soft); }
-  .legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12.5px; }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; }
-  .act { border: 0; border-radius: 8px; font-weight: 800; font-size: 12px; padding: 6px 10px; cursor: pointer; background: var(--forest); color: #fff; }
-  .act.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--ink); }
-  .act.warn { background: var(--gold); color: var(--ink); }
-  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-  .answer { display: flex; gap: 6px; margin-top: 6px; }
-  .answer input { flex: 1; min-width: 0; }
-  td .q { font-size: 13.5px; }
-  .empty { color: var(--muted); font-size: 14px; padding: 10px 0; }
-  .sent-list { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; font-size: 13px; }
-  .sent-list div { padding: 6px 0; border-bottom: 1px dashed var(--line); }
-  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--forest); color: #fff; padding: 14px 18px; border-radius: 12px; font-weight: 700; display: none; max-width: 420px; z-index: 5; }
-  #toast.bad { background: var(--red); }
-  #login { display: none; }
-  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
-  .field input { font: inherit; font-weight: 400; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+  /* ---------- shell ---------- */
+  .layout { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+  aside.nav { background: linear-gradient(180deg, #123B26 0%, #17492F 100%); color: #fff; padding: 20px 14px; position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
+  aside.nav .logo { display: flex; align-items: center; gap: 10px; font-weight: 750; font-size: 17px; letter-spacing: -.01em; padding: 4px 8px 18px; }
+  aside.nav .logo .mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.12); }
+  aside.nav .logo small { display: block; font-size: 11px; font-weight: 500; color: #A9C8B4; letter-spacing: 0; }
+  aside.nav .group { font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #8FB39C; padding: 14px 10px 6px; }
+  aside.nav a { display: flex; align-items: center; gap: 10px; color: #D6E7DC; text-decoration: none; padding: 8px 10px; border-radius: 9px; font-weight: 550; font-size: 14px; margin-bottom: 1px; transition: background .12s, color .12s; }
+  aside.nav a .i { width: 18px; height: 18px; opacity: .85; }
+  aside.nav a:hover { background: rgba(255,255,255,.08); color: #fff; }
+  aside.nav a.on { background: rgba(255,255,255,.14); color: #fff; }
+  aside.nav .foot { margin-top: auto; padding: 14px 10px 0; font-size: 11.5px; color: #8FB39C; }
+  main { padding: 0 32px 40px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .top { position: sticky; top: 0; z-index: 4; margin: 0 -32px; padding: 18px 32px 14px; background: rgba(245, 247, 244, .92); backdrop-filter: blur(8px); border-bottom: 1px solid transparent; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .top h1 { margin: 2px 0 0; font-size: 23px; font-weight: 750; }
   .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .who .tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-2); background: var(--card); border: 1px solid var(--line); padding: 6px 10px; border-radius: 999px; box-shadow: var(--shadow-sm); }
+  .mode { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; padding: 6px 10px; border-radius: 999px; }
+  .mode::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .mode.live { background: var(--leaf-soft); color: var(--forest); }
+  .mode.live::before { box-shadow: 0 0 0 3px rgba(46,139,87,.2); animation: pulse 2s infinite; }
+  .mode.demo { background: var(--gold-soft); color: var(--gold-ink); }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(46,139,87,0); } }
+
+  /* ---------- signed out: a proper login screen ---------- */
+  body.signed-out aside.nav a, body.signed-out aside.nav .group { display: none; }
+  body.signed-out .top, body.signed-out #footnote { display: none; }
+  #login { display: none; max-width: 420px; width: 100%; margin: 12vh auto 0; padding: 30px; box-shadow: var(--shadow-md); }
+  #login .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  #login .brand .mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--forest); color: #fff; }
+  #login h3 { font-size: 20px; margin: 0; }
+  #login .login-form { max-width: none !important; }
+  #login .act, #login button[type=submit], #login .login-form button { width: 100%; padding: 11px; font-size: 14px; }
+
+  /* ---------- cards and grids ---------- */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .kpi { display: flex; flex-direction: column; gap: 2px; position: relative; overflow: hidden; }
+  .kpi .top-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .kpi .l { font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .kpi .v { font-size: 30px; font-weight: 750; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -.02em; margin-top: 6px; }
+  .kpi .muted { font-size: 12.5px; }
+  .kpi.kpi-alert::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--red); }
+  .kpi.kpi-alert .v { color: var(--red); }
+  .row { display: grid; grid-template-columns: 1.45fr 1fr; gap: 16px; align-items: start; }
+  .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .card { min-width: 0; }
+  .card h3 { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 15.5px; margin-bottom: 14px; }
+  .card h3 .title { display: flex; align-items: center; gap: 10px; }
+  .card h3 .muted { font-weight: 500; }
+  .scroll { overflow-x: auto; }
+  .section-label { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 10px 2px -4px; }
+
+  /* bars and stacks */
+  .bar { display: grid; grid-template-columns: 130px 1fr 44px; align-items: center; gap: 10px; font-size: 13px; margin: 7px 0; }
+  .bar .track { height: 8px; background: var(--line-2); border-radius: 99px; overflow: hidden; }
+  .bar .track i { display: block; height: 100%; background: var(--leaf); border-radius: 99px; }
+  .bar b { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; }
+  .stack { display: flex; height: 12px; border-radius: 99px; overflow: hidden; margin: 6px 0 10px; background: var(--line-2); gap: 2px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; color: var(--text-2); }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; }
+
+  /* statuses: one look everywhere */
+  .s-new, .s-open, .l-Outbreak { background: var(--red-soft); color: var(--red); }
+  .l-Warning, .s-callback { background: var(--gold-soft); color: var(--gold-ink); }
+  .s-verified, .s-answered, .l-Watch { background: var(--leaf-soft); color: var(--forest); }
+  .s-rejected, .s-closed { background: #EEF0EE; color: var(--muted); }
+
+  /* forms */
+  textarea, .dash select, .dash input[type=text] { width: 100%; }
+  textarea { line-height: 1.45; resize: vertical; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .chan { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+  .chan label { font-size: 13px; font-weight: 600; display: flex; gap: 6px; align-items: center; background: var(--card); border: 1px solid var(--line); padding: 7px 11px; border-radius: 9px; cursor: pointer; }
+  .chan label:has(input:checked) { border-color: var(--leaf); background: var(--leaf-soft); color: var(--forest); }
+  .chan label.off { background: var(--paper); color: var(--muted); cursor: default; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .answer { display: flex; gap: 6px; margin-top: 8px; }
+  .answer input { flex: 1; min-width: 0; }
+  td .q { font-size: 14px; }
+  .empty { color: var(--muted); font-size: 14px; padding: 18px 4px; }
+  .sent-list { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 13px; }
+  .sent-list > b { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .sent-list div { padding: 9px 0; border-bottom: 1px solid var(--line-2); }
+  .sent-list div:last-child { border-bottom: 0; }
+  .field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .field input { font-weight: 400; }
   .hide { display: none !important; }
-  .qphoto { display: block; width: 84px; height: 84px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); margin-top: 6px; cursor: zoom-in; background: var(--leaf-soft); }
-  .ft { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-  .ft .v { font-size: 34px; font-weight: 800; color: var(--forest); font-variant-numeric: tabular-nums; }
+  .qphoto { display: block; width: 88px; height: 88px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); margin-top: 8px; cursor: zoom-in; background: var(--leaf-soft); }
+  .assignee { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  /* field test */
+  .ft { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .ft .v { font-size: 34px; font-weight: 750; color: var(--forest); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
   .ft .v.low { color: var(--red); }
-  .ft .l { font-size: 13px; font-weight: 700; }
-  .filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-  .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+  .ft .l { font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .ft-foot { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+
+  /* farmers */
+  .filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .search { position: relative; }
+  .search .i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .search input { padding-left: 34px; }
+  .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; }
   tr.click { cursor: pointer; }
-  tr.click:hover td { background: var(--leaf-soft); }
-  dialog#farmerDlg { width: min(820px, 96vw); max-height: 92vh; border: 0; border-radius: 16px; padding: 0; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
-  dialog#farmerDlg::backdrop { background: rgba(20,40,25,.45); }
-  .dlg-head { position: sticky; top: 0; background: var(--forest); color: #fff; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 10px; z-index: 1; }
-  .dlg-head h3 { margin: 0; color: #fff; }
-  .dlg-body { padding: 16px 20px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 18px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
-  .chips span { background: var(--leaf-soft); color: var(--forest); font-size: 12px; font-weight: 800; padding: 4px 8px; border-radius: 6px; }
+  tr.click:hover td { background: #F3F8F4; }
+
+  /* farmer dialog */
+  dialog#farmerDlg { width: min(860px, 96vw); max-height: 92vh; border: 0; border-radius: 18px; padding: 0; box-shadow: var(--shadow-lg); }
+  dialog#farmerDlg::backdrop { background: rgba(12, 30, 20, .5); backdrop-filter: blur(2px); }
+  .dlg-head { position: sticky; top: 0; background: var(--forest); color: #fff; padding: 16px 22px; display: flex; justify-content: space-between; align-items: center; gap: 10px; z-index: 1; }
+  .dlg-head h3 { margin: 0; color: #fff; font-size: 17px; }
+  .dlg-head .act.ghost { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.25); box-shadow: none; }
+  .dlg-body { padding: 18px 22px 22px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 22px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; }
+  .chips span { background: var(--leaf-soft); color: var(--forest); font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px; }
   .chips span.bad { background: var(--red-soft); color: var(--red); }
-  .timeline { border-left: 3px solid var(--leaf-soft); padding-left: 12px; font-size: 13.5px; }
-  .timeline .ev { padding: 6px 0 8px; border-bottom: 1px dashed var(--line); }
+  .timeline { position: relative; padding-left: 18px; font-size: 13.5px; }
+  .timeline::before { content: ""; position: absolute; left: 4px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+  .timeline .ev { position: relative; padding: 4px 0 12px; }
+  .timeline .ev::before { content: ""; position: absolute; left: -18px; top: 9px; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2px solid var(--leaf); }
   .timeline .ev .when { color: var(--muted); font-size: 12px; }
-  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } aside.nav { display: none; } .kpis { grid-template-columns: 1fr 1fr; } .row, .dlg-body, .ft { grid-template-columns: 1fr; } .filters { grid-template-columns: 1fr 1fr; } main { padding: 16px; } }
+
+  #toast { position: fixed; bottom: 24px; right: 24px; background: #12251A; color: #fff; padding: 13px 16px; border-radius: 12px; font-weight: 600; font-size: 14px; display: none; max-width: 420px; z-index: 50; box-shadow: var(--shadow-lg); border-left: 4px solid var(--leaf); }
+  #toast.bad { border-left-color: #F97066; }
+
+  /* ---------- small screens: the menu becomes a scrolling strip ---------- */
+  @media (max-width: 1100px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 1000px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.nav { position: sticky; top: 0; height: auto; z-index: 10; flex-direction: row; align-items: center; overflow-x: auto; padding: 8px 10px; gap: 2px; }
+    aside.nav .logo { padding: 0 8px 0 0; font-size: 15px; } aside.nav .logo small, aside.nav .group, aside.nav .foot { display: none; }
+    aside.nav a { white-space: nowrap; font-size: 13px; padding: 7px 10px; }
+    .top { position: static; } main { padding: 0 16px 32px; } .top { margin: 0 -16px; padding: 14px 16px; }
+    .row, .dlg-body, .ft { grid-template-columns: 1fr; } .filters { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px) { .kpis { gap: 10px; } .kpi { padding: 12px; } .kpi .v { font-size: 24px; margin-top: 2px; } .kpi .h-ic { display: none; } .kpi .muted { font-size: 11.5px; } .form-row { grid-template-columns: 1fr; } .bar { grid-template-columns: 96px 1fr 36px; } }
 </style>
 </head>
-<body class="dash">
+<body class="dash signed-out">
 <div class="layout">
-  <aside class="nav">
-    <div class="logo">🌱 AgriConnect</div>
-    <a href="#overview" data-perm="stats:read">📊 Overview</a>
-    <a href="#hotspots" data-perm="hotspots:read">⚠ Hotspots</a>
-    <a href="#weather" data-perm="stats:read">🌦️ Weather</a>
-    <a href="#prices" data-perm="prices:read">💰 Market prices</a>
-    <a href="#reports" data-perm="reports:read">🐛 Pest reports</a>
-    <a href="#questions" data-perm="questions:read">💬 Farmer questions</a>
-    <a href="#advisory" data-perm="broadcasts:send">📣 Send advisory</a>
-    <a href="#regRow" data-perm="registrations:create">📝 Register farmers</a>
-    <a href="#farmers" data-perm="farmers:read">👩🏾‍🌾 Farmers</a>
-    <a href="#fieldTest" data-perm="stats:read">🧪 Field test</a>
-    <a href="content.html" data-perm="content:read">📝 Advice content</a>
-    <a href="staff.html">🔐 Staff &amp; security</a>
-    <a href="ussd.html">📱 USSD simulator</a>
+  <aside class="nav" aria-label="Main menu">
+    <div class="logo"><span class="mark"><svg class="i i-lg"><use href="#i-sprout"/></svg></span><div>AgriConnect<small>Ministry of Agriculture</small></div></div>
+    <div class="group">Daily work</div>
+    <a href="#overview" data-perm="stats:read"><svg class="i"><use href="#i-layout-dashboard"/></svg> Overview</a>
+    <a href="#questions" data-perm="questions:read"><svg class="i"><use href="#i-messages-square"/></svg> Farmer questions</a>
+    <a href="#reports" data-perm="reports:read"><svg class="i"><use href="#i-bug"/></svg> Pest reports</a>
+    <a href="#hotspots" data-perm="hotspots:read"><svg class="i"><use href="#i-flame"/></svg> Hotspots</a>
+    <a href="#advisory" data-perm="broadcasts:send"><svg class="i"><use href="#i-megaphone"/></svg> Send advisory</a>
+    <div class="group">Farmers</div>
+    <a href="#farmers" data-perm="farmers:read"><svg class="i"><use href="#i-users"/></svg> Farmers</a>
+    <a href="#regRow" data-perm="registrations:create"><svg class="i"><use href="#i-user-plus"/></svg> Register farmers</a>
+    <a href="#fieldTest" data-perm="stats:read"><svg class="i"><use href="#i-flask-conical"/></svg> Field test</a>
+    <div class="group">Markets &amp; weather</div>
+    <a href="#weather" data-perm="stats:read"><svg class="i"><use href="#i-cloud-sun"/></svg> Weather</a>
+    <a href="#prices" data-perm="prices:read"><svg class="i"><use href="#i-coins"/></svg> Market prices</a>
+    <div class="group">Admin</div>
+    <a href="content.html" data-perm="content:read"><svg class="i"><use href="#i-file-text"/></svg> Advice content</a>
+    <a href="staff.html"><svg class="i"><use href="#i-shield-check"/></svg> Staff &amp; security</a>
+    <a href="ussd.html"><svg class="i"><use href="#i-smartphone"/></svg> USSD simulator</a>
+    <div class="foot">RETRAP AgTech Hackathon · Group 10</div>
   </aside>
   <main>
     <div class="top" id="overview">
-      <div><div class="eyebrow">Extension Officer Portal · Ministry of Agriculture</div><h1 id="hello">Good morning, Officer Mulbah</h1></div>
-      <div class="who"><span class="mode" id="mode">…</span><span class="tag hide" id="who"></span><button class="act ghost hide" id="signout">Sign out</button></div>
+      <div><div class="eyebrow">Extension officer portal</div><h1 id="hello">Overview</h1></div>
+      <div class="who"><span class="mode" id="mode">…</span><span class="tag hide" id="who"></span><button class="act ghost hide" id="signout"><svg class="i"><use href="#i-log-out"/></svg> Sign out</button></div>
     </div>
 
     <div class="card" id="login">
-      <h3>Staff login</h3>
-      <p class="muted">Use your own AgriConnect account. Ask your admin if you don't have one.</p>
+      <div class="brand"><span class="mark"><svg class="i i-lg"><use href="#i-sprout"/></svg></span><div><h3>Staff login</h3><div class="muted">AgriConnect extension officer portal</div></div></div>
+      <p class="muted" style="margin:0 0 14px">Use your own AgriConnect account. Ask your admin if you don't have one.</p>
       <div id="loginForm"></div>
     </div>
 
@@ -117,85 +183,87 @@
 
     <div class="kpis" id="kpis"></div>
 
-    <div class="row" id="regRow">
-      <div class="card" id="registerCard">
-        <h3>📝 Register a farmer</h3>
-        <p class="muted" style="margin:0 0 8px">The farmer gets an SMS and joins only when <b>they</b> reply YES (or answer on *347#). Their consent, their choice.</p>
-        <div class="form-row"><input type="text" id="rName" placeholder="Name"><input type="text" id="rPhone" placeholder="Phone, e.g. 0777 123 456"></div>
-        <div class="form-row"><select id="rCounty" aria-label="County"></select><input type="text" id="rDistrict" placeholder="District or town"></div>
-        <div class="form-row"><select id="rLang" aria-label="Language"><option value="en">Liberian English</option><option value="kpe">Kpelle</option><option value="bsq">Bassa</option><option value="kss">Kissi</option></select><span></span></div>
-        <div id="rCrops" style="margin:6px 0 10px;font-size:14px"></div>
-        <button class="btn" onclick="registerFarmer()">Send invitation</button>
-      </div>
-      <div class="card" id="invites"><h3>Invitations <span class="muted">waiting for the farmer's YES</span></h3><div class="scroll"><table id="regTable"></table></div></div>
-    </div>
-
-    <div class="card" id="fieldTest">
-      <h3>🧪 Field test <span class="muted">last 30 days · MVP exit criteria</span></h3>
-      <div class="ft">
-        <div><div class="l">Finish signing up on *347#</div><div class="v" id="ftRate">–</div><div class="muted" id="ftNote"></div><div id="ftSteps" style="margin-top:8px"></div></div>
-        <div><div class="l">“Did it help?” after a pest report</div><div class="v" id="fbRate">–</div><div class="muted" id="fbNote"></div><div id="fbPests" style="margin-top:8px"></div></div>
-      </div>
-      <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
-        <span class="l" style="font-size:13px;font-weight:700">Advice approved by an agronomist</span><b id="crRate" style="font-size:20px">–</b><span class="muted" id="crNote"></span>
-      </div>
-    </div>
-
-    <div class="row" id="overviewRow">
-      <div class="card"><h3>Registered farmers by county</h3><div id="counties"></div></div>
-      <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
-        <div class="card" id="hotspots"><h3>⚠ Hotspots (7 days) <span class="muted">3+ reports, same pest &amp; county</span></h3><div class="scroll"><table id="hotspotTable"></table></div></div>
-        <div class="card"><h3>How farmers joined</h3><div class="stack" id="stack"></div><div class="legend" id="legend"></div></div>
-        <div class="card" id="jobs"><h3>🤖 Automatic advice &amp; SMS</h3><div id="jobInfo" class="muted">…</div>
-          <div class="actions" style="margin-top:10px"><button class="act ghost" onclick="runAdvice(true)">Preview</button><button class="act" onclick="runAdvice(false)">Send due advice now</button></div>
+    <div class="row" id="workRow">
+      <div class="card" id="questions"><h3><span class="title"><span class="h-ic "><svg class="i"><use href="#i-messages-square"/></svg></span> Farmer questions</span><label class="muted" style="font-size:13px;display:flex;gap:6px;align-items:center;font-weight:500"><input type="checkbox" id="qMine" onchange="refresh()"> Mine only</label></h3><div class="scroll"><table id="questionTable"></table></div></div>
+      <div class="side">
+        <div class="card" id="hotspots"><h3><span class="title"><span class="h-ic red"><svg class="i"><use href="#i-flame"/></svg></span> Hotspots</span><span class="muted">7 days · 3+ reports, same pest &amp; county</span></h3><div class="scroll"><table id="hotspotTable"></table></div></div>
+        <div class="card" id="advisory">
+          <h3><span class="title"><span class="h-ic gold"><svg class="i"><use href="#i-megaphone"/></svg></span> Send an advisory</span></h3>
+          <div class="form-row">
+            <select id="bCounty" aria-label="County"><option value="">All counties</option></select>
+            <select id="bCrop" aria-label="Crop"><option value="">All crops</option></select>
+          </div>
+          <div class="chan">
+            <label><input type="checkbox" id="chSms" checked> SMS</label>
+            <label title="Shown on the farmer app's home screen (no SMS cost)"><input type="checkbox" id="chApp" checked> App</label>
+            <label class="off" title="Coming later"><input type="checkbox" disabled> Voice call (soon)</label>
+          </div>
+          <textarea id="bMsg" rows="4" maxlength="160">Fall armyworm seen in Nimba. Check your fields this week. Pick worms in the morning. Dial *347# option 4 to report.</textarea>
+          <div class="muted" id="bCount" style="margin:8px 0 12px"></div>
+          <button class="btn" id="bSend" onclick="broadcast()"><svg class="i"><use href="#i-send"/></svg> Send to farmers</button>
+          <div class="sent-list" id="sentList"></div>
         </div>
       </div>
     </div>
 
-    <div class="row" id="marketRow">
-      <div class="card" id="weather"><h3>🌦️ Weather by county <button class="act ghost" onclick="refreshWeather()">Refresh now</button></h3><div class="scroll"><table id="weatherTable"></table></div><p class="muted" id="weatherNote" style="margin:8px 0 0"></p></div>
-      <div class="card" id="prices">
-        <h3>💰 Market prices <select id="pMarket" style="width:auto;font-size:13px;padding:6px"></select></h3>
-        <div class="scroll"><table id="priceTable"></table></div>
-        <div id="flagged"></div>
-        <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Market reporters (<span id="repCount">0</span>) · add one</summary>
-          <div class="answer"><input type="text" id="repPhone" placeholder="Phone"><input type="text" id="repName" placeholder="Name"><select id="repMarket" style="width:auto"></select><button class="act" onclick="addReporterForm()">Add</button></div>
-          <p class="muted" style="margin:6px 0 0">Reporters send: <b>PRICE GBARNGA RICE 45</b>. Unusual prices wait here for you to check.</p>
-        </details>
-      </div>
-    </div>
+    <div class="card" id="reports"><h3><span class="title"><span class="h-ic red"><svg class="i"><use href="#i-bug"/></svg></span> Pest reports</span><span class="muted">newest first</span></h3><div class="scroll"><table id="reportTable"></table></div></div>
 
     <div class="card" id="farmers">
-      <h3>👩🏾‍🌾 Farmers <span class="muted" id="fCount"></span><button class="act ghost" id="fExport" onclick="exportFarmers()">⬇ Download CSV</button></h3>
+      <h3><span class="title"><span class="h-ic "><svg class="i"><use href="#i-users"/></svg></span> Farmers <span class="muted" id="fCount"></span></span><button class="act ghost" id="fExport" onclick="exportFarmers()"><svg class="i"><use href="#i-download"/></svg> Download CSV</button></h3>
       <div class="filters">
-        <input type="text" id="fQ" placeholder="Search name, district or phone" aria-label="Search farmers">
+        <div class="search"><svg class="i"><use href="#i-search"/></svg><input type="text" id="fQ" placeholder="Search name, district or phone" aria-label="Search farmers"></div>
         <select id="fCounty" aria-label="County"></select>
         <select id="fCrop" aria-label="Crop"><option value="">All crops</option></select>
         <select id="fStatus" aria-label="Status"><option value="">Everyone</option><option value="active">Getting SMS</option><option value="opted_out">Said STOP</option></select>
       </div>
       <div class="scroll"><table id="farmerTable"></table></div>
-      <div class="pager"><button class="act ghost" id="fPrev" onclick="farmerPage(-1)">← Newer</button><span class="muted" id="fPage"></span><button class="act ghost" id="fNext" onclick="farmerPage(1)">Older →</button></div>
+      <div class="pager"><button class="act ghost" id="fPrev" onclick="farmerPage(-1)"><svg class="i"><use href="#i-chevron-left"/></svg> Newer</button><span class="muted" id="fPage"></span><button class="act ghost" id="fNext" onclick="farmerPage(1)">Older <svg class="i"><use href="#i-chevron-right"/></svg></button></div>
     </div>
 
-    <div class="card" id="reports"><h3>Pest reports <span class="muted">newest first</span></h3><div class="scroll"><table id="reportTable"></table></div></div>
+    <div class="row" id="regRow">
+      <div class="card" id="registerCard">
+        <h3><span class="title"><span class="h-ic "><svg class="i"><use href="#i-user-plus"/></svg></span> Register a farmer</span></h3>
+        <p class="muted" style="margin:-4px 0 14px">The farmer gets an SMS and joins only when <b>they</b> reply YES (or answer on *347#). Their consent, their choice.</p>
+        <div class="form-row"><input type="text" id="rName" placeholder="Name"><input type="text" id="rPhone" placeholder="Phone, e.g. 0777 123 456"></div>
+        <div class="form-row"><select id="rCounty" aria-label="County"></select><input type="text" id="rDistrict" placeholder="District or town"></div>
+        <div class="form-row"><select id="rLang" aria-label="Language"><option value="en">Liberian English</option><option value="kpe">Kpelle</option><option value="bsq">Bassa</option><option value="kss">Kissi</option></select><span></span></div>
+        <div id="rCrops" style="margin:6px 0 14px;font-size:14px"></div>
+        <button class="btn" onclick="registerFarmer()"><svg class="i"><use href="#i-send"/></svg> Send invitation</button>
+      </div>
+      <div class="card" id="invites"><h3><span class="title"><span class="h-ic "><svg class="i"><use href="#i-mail"/></svg></span> Invitations</span><span class="muted">waiting for the farmer's YES</span></h3><div class="scroll"><table id="regTable"></table></div></div>
+    </div>
 
-    <div class="row" id="workRow">
-      <div class="card" id="questions"><h3>Farmer questions <label class="muted" style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="qMine" onchange="refresh()"> Mine only</label></h3><div class="scroll"><table id="questionTable"></table></div></div>
-      <div class="card" id="advisory">
-        <h3>📣 Send an advisory</h3>
-        <div class="form-row">
-          <select id="bCounty" aria-label="County"><option value="">All counties</option></select>
-          <select id="bCrop" aria-label="Crop"><option value="">All crops</option></select>
+    <div class="card" id="fieldTest">
+      <h3><span class="title"><span class="h-ic blue"><svg class="i"><use href="#i-flask-conical"/></svg></span> Field test</span><span class="muted">last 30 days · MVP exit criteria</span></h3>
+      <div class="ft">
+        <div><div class="l">Finish signing up on *347#</div><div class="v" id="ftRate">–</div><div class="muted" id="ftNote"></div><div id="ftSteps" style="margin-top:10px"></div></div>
+        <div><div class="l">“Did it help?” after a pest report</div><div class="v" id="fbRate">–</div><div class="muted" id="fbNote"></div><div id="fbPests" style="margin-top:10px"></div></div>
+      </div>
+      <div class="ft-foot">
+        <span class="l" style="font-size:13px;font-weight:600">Advice approved by an agronomist</span><b id="crRate" style="font-size:20px">–</b><span class="muted" id="crNote"></span>
+      </div>
+    </div>
+
+    <div class="row" id="overviewRow">
+      <div class="card"><h3><span class="title"><span class="h-ic "><svg class="i"><use href="#i-map-pin"/></svg></span> Registered farmers by county</span></h3><div id="counties"></div></div>
+      <div class="side">
+        <div class="card"><h3><span class="title"><span class="h-ic "><svg class="i"><use href="#i-smartphone"/></svg></span> How farmers joined</span></h3><div class="stack" id="stack"></div><div class="legend" id="legend"></div></div>
+        <div class="card" id="jobs"><h3><span class="title"><span class="h-ic blue"><svg class="i"><use href="#i-bot"/></svg></span> Automatic advice &amp; SMS</span></h3><div id="jobInfo" class="muted">…</div>
+          <div class="actions" style="margin-top:12px"><button class="act ghost" onclick="runAdvice(true)"><svg class="i"><use href="#i-eye"/></svg> Preview</button><button class="act" onclick="runAdvice(false)"><svg class="i"><use href="#i-send"/></svg> Send due advice now</button></div>
         </div>
-        <div class="chan">
-          <label><input type="checkbox" id="chSms" checked> SMS</label>
-          <label title="Shown on the farmer app's home screen (no SMS cost)"><input type="checkbox" id="chApp" checked> App</label>
-          <label class="off" title="Coming later"><input type="checkbox" disabled> Voice call (soon)</label>
-        </div>
-        <textarea id="bMsg" rows="4" maxlength="160">Fall armyworm seen in Nimba. Check your fields this week. Pick worms in the morning. Dial *347# option 4 to report.</textarea>
-        <div class="muted" id="bCount" style="margin:6px 0 10px"></div>
-        <button class="btn" id="bSend" onclick="broadcast()">Send to farmers</button>
-        <div class="sent-list" id="sentList"></div>
+      </div>
+    </div>
+
+    <div class="row" id="marketRow">
+      <div class="card" id="weather"><h3><span class="title"><span class="h-ic blue"><svg class="i"><use href="#i-cloud-sun"/></svg></span> Weather by county</span><button class="act ghost" onclick="refreshWeather()"><svg class="i"><use href="#i-refresh-cw"/></svg> Refresh now</button></h3><div class="scroll"><table id="weatherTable"></table></div><p class="muted" id="weatherNote" style="margin:10px 0 0"></p></div>
+      <div class="card" id="prices">
+        <h3><span class="title"><span class="h-ic gold"><svg class="i"><use href="#i-coins"/></svg></span> Market prices</span><select id="pMarket" style="width:auto;font-size:13px;padding:6px 8px"></select></h3>
+        <div class="scroll"><table id="priceTable"></table></div>
+        <div id="flagged"></div>
+        <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Market reporters (<span id="repCount">0</span>) · add one</summary>
+          <div class="answer"><input type="text" id="repPhone" placeholder="Phone"><input type="text" id="repName" placeholder="Name"><select id="repMarket" style="width:auto"></select><button class="act" onclick="addReporterForm()">Add</button></div>
+          <p class="muted" style="margin:8px 0 0">Reporters send: <b>PRICE GBARNGA RICE 45</b>. Unusual prices wait here for you to check.</p>
+        </details>
       </div>
     </div>
     </div>
@@ -204,7 +272,7 @@
 </div>
 <div id="toast"></div>
 <dialog id="farmerDlg" aria-labelledby="dlgTitle">
-  <div class="dlg-head"><h3 id="dlgTitle">Farmer</h3><button class="act ghost" style="color:#fff;border-color:rgba(255,255,255,.5)" onclick="$('#farmerDlg').close()">Close ✕</button></div>
+  <div class="dlg-head"><h3 id="dlgTitle">Farmer</h3><button class="act ghost" onclick="$('#farmerDlg').close()"><svg class="i"><use href="#i-x"/></svg> Close</button></div>
   <div class="dlg-body">
     <div>
       <div id="dlgInfo"></div>
@@ -220,6 +288,7 @@
     <div><h4 style="margin:0 0 8px">History <span class="muted">newest first</span></h4><div class="timeline" id="dlgTimeline"></div></div>
   </div>
 </dialog>
+<script src="assets/icons.js"></script>
 <script src="data.js"></script>
 <script src="staff-auth.js"></script>
 <script>
@@ -234,6 +303,7 @@ let live = false;
 let names = { pests: {}, crops: {} };
 let reach = null;
 
+const ic = (name, cls = "i") => `<svg class="${cls}"><use href="#i-${name}"/></svg>`;
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const n = (v) => Number(v ?? 0).toLocaleString("en-US");
 const ago = (sqlTime) => {
@@ -265,6 +335,7 @@ async function api(method, path, body) {
 
 function showLogin() {
   me = null;
+  document.body.classList.add("signed-out");
   $("#login").style.display = "block";
   $("#dashBody").style.display = "none";
   show("#who, #signout", false);
@@ -273,9 +344,11 @@ function showLogin() {
 
 function applyRole() {
   $("#login").style.display = "none";
+  document.body.classList.remove("signed-out");
   $("#dashBody").style.display = "contents";
-  $("#hello").textContent = `Good morning, ${me.name}`;
-  $("#who").textContent = `${me.role}${me.counties.length ? " · " + me.counties.join(", ") : " · all counties"}${me.two_factor ? " · 2-step ✓" : ""}`;
+  const hour = new Date().getUTCHours(); // Liberia time = UTC
+  $("#hello").textContent = `${hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"}, ${me.name}`;
+  $("#who").innerHTML = `${ic("user")} ${esc(me.role)}${me.counties.length ? " · " + esc(me.counties.join(", ")) : " · all counties"}${me.two_factor ? ` · ${ic("shield-check")}` : ""}`;
   show("#who, #signout", true);
   show("#reports", has("reports:read"));
   show("#questions", has("questions:read"));
@@ -286,7 +359,8 @@ function applyRole() {
   show("#prices details", has("reporters:write"));
   show("#weather button", has("weather:run"));
   show("#kpis, #overviewRow, #marketRow", has("stats:read"));
-  show("#workRow", has("questions:read") || has("broadcasts:send"));
+  show("#hotspots", has("hotspots:read"));
+  show("#workRow", has("questions:read") || has("broadcasts:send") || has("hotspots:read"));
   show("#regRow", has("registrations:create"));
   show("#farmers", has("farmers:read"));
   show("#fieldTest", has("stats:read"));
@@ -310,7 +384,7 @@ function renderCropPicker(crops) {
      <select class="rMonth" data-crop="${esc(id)}" style="width:auto">${MONTHS.map((m, i) => `<option value="${i + 1}" ${i === 4 ? "selected" : ""}>${m}</option>`).join("")}</select></div>`).join("");
 }
 
-const REG_STATUS = { waiting: ["Waiting for YES", "s-callback"], joined: ["Joined ✓", "s-answered"], refused: ["Said no", "s-closed"], expired: ["Expired", "s-closed"], cancelled: ["Cancelled", "s-closed"] };
+const REG_STATUS = { waiting: ["Waiting for YES", "s-callback"], joined: ["Joined", "s-answered"], refused: ["Said no", "s-closed"], expired: ["Expired", "s-closed"], cancelled: ["Cancelled", "s-closed"] };
 function renderRegistrations(list) {
   $("#regTable").innerHTML = list.length
     ? `<tr><th>Farmer</th><th>County</th><th>By</th><th>Status</th><th></th></tr>` +
@@ -385,14 +459,14 @@ function farmerPage(step) { farmerOffset = Math.max(0, farmerOffset + step * PAG
 
 const EVENT = {
   message: (e) => e.direction === "in"
-    ? `📩 <b>From farmer</b> (${esc(e.channel.toUpperCase())})<div>${esc(e.body)}</div>`
-    : `📤 <b>To farmer</b> · ${esc(e.kind)} · <span class="status ${e.status === "failed" ? "s-new" : e.status === "delivered" ? "s-answered" : "s-closed"}">${esc(e.status)}</span><div>${esc(e.body)}</div>`,
-  pest_report: (e) => `🐛 <b>Pest report PR-${e.id}</b> · ${esc(e.crop ?? "")} · ${esc(names.pests[e.confirmed_pest ?? e.suggested_pest] ?? "not matched")} <span class="status s-${esc(e.status)}">${esc(e.status)}</span>`,
-  question: (e) => `💬 <b>Question Q-${e.id}</b> <span class="status s-${esc(e.status)}">${esc(e.status)}</span><div>${e.kind === "callback" ? "📞 Wants a call-back" : esc(e.body ?? "")}</div>${e.answer ? `<div class="muted">↳ ${esc(e.answer)} (${esc(e.answered_by ?? "")})</div>` : ""}`,
-  registration: (e) => `📝 <b>Invited by ${esc(e.registrar_name ?? "staff")}</b> · ${esc(REG_STATUS[e.status]?.[0] ?? e.status)} · ${e.sms_sent} SMS`,
-  joined: (e) => `✅ <b>Joined</b> via ${esc((e.channel ?? "").toUpperCase())}${e.registered_by ? ` (registered by ${esc(e.registered_by)})` : ""}`,
-  opted_out: () => "⛔ <b>Said STOP</b>: gets no SMS until they send START",
-  change: (e) => `✏️ <b>Details changed</b> by ${e.by === "farmer" ? "the farmer on *347#" : esc(e.by ?? "staff")}` +
+    ? `${ic("inbox")} <b>From farmer</b> (${esc(e.channel.toUpperCase())})<div>${esc(e.body)}</div>`
+    : `${ic("send")} <b>To farmer</b> · ${esc(e.kind)} · <span class="status ${e.status === "failed" ? "s-new" : e.status === "delivered" ? "s-answered" : "s-closed"}">${esc(e.status)}</span><div>${esc(e.body)}</div>`,
+  pest_report: (e) => `${ic("bug")} <b>Pest report PR-${e.id}</b> · ${esc(e.crop ?? "")} · ${esc(names.pests[e.confirmed_pest ?? e.suggested_pest] ?? "not matched")} <span class="status s-${esc(e.status)}">${esc(e.status)}</span>`,
+  question: (e) => `${ic("messages-square")} <b>Question Q-${e.id}</b> <span class="status s-${esc(e.status)}">${esc(e.status)}</span><div>${e.kind === "callback" ? `${ic("phone")} Wants a call-back` : esc(e.body ?? "")}</div>${e.answer ? `<div class="muted">↳ ${esc(e.answer)} (${esc(e.answered_by ?? "")})</div>` : ""}`,
+  registration: (e) => `${ic("mail")} <b>Invited by ${esc(e.registrar_name ?? "staff")}</b> · ${esc(REG_STATUS[e.status]?.[0] ?? e.status)} · ${e.sms_sent} SMS`,
+  joined: (e) => `${ic("circle-check")} <b>Joined</b> via ${esc((e.channel ?? "").toUpperCase())}${e.registered_by ? ` (registered by ${esc(e.registered_by)})` : ""}`,
+  opted_out: () => `${ic("circle-alert")} <b>Said STOP</b>: gets no SMS until they send START`,
+  change: (e) => `${ic("pencil")} <b>Details changed</b> by ${e.by === "farmer" ? "the farmer on *347#" : esc(e.by ?? "staff")}` +
     Object.entries(e.changes).filter(([k]) => k !== "via").map(([k, [from, to]]) => `<div class="muted">${esc(k)}: ${esc(from ?? "—")} → ${esc(to ?? "—")}</div>`).join("")
 };
 
@@ -459,7 +533,7 @@ function renderFieldTest(ft) {
   $("#ftRate").classList.toggle("low", u.completion_rate !== null && !u.meets_target);
   const finished = u.registered + u.cancelled + u.abandoned;
   $("#ftNote").innerHTML = finished
-    ? `${n(u.registered)} of ${n(finished)} finished · target ${pct(u.target)} ${u.meets_target ? "✓" : "✗"}${u.in_progress ? ` · ${n(u.in_progress)} dialling now` : ""}`
+    ? `${n(u.registered)} of ${n(finished)} finished · target ${pct(u.target)} ${u.meets_target ? "met" : "not met yet"}${u.in_progress ? ` · ${n(u.in_progress)} dialling now` : ""}`
     : "No one has tried to sign up on *347# yet.";
   const quit = Object.entries(u.gave_up_at).filter(([, k]) => k > 0);
   const max = Math.max(1, ...quit.map(([, k]) => k));
@@ -475,7 +549,7 @@ function renderFieldTest(ft) {
   if (cr) {
     $("#crRate").textContent = `${cr.en.approved} of ${cr.en.total}`;
     $("#crRate").style.color = cr.all_en_approved ? "var(--forest)" : "var(--red)";
-    $("#crNote").innerHTML = `English SMS texts ${cr.all_en_approved ? "✓ all approved" : "· every text must be approved before the pilot"}${cr.drafts ? ` · ${cr.drafts} draft(s) waiting` : ""}${has("content:read") ? ' · <a href="content.html">open the content editor</a>' : ""}`;
+    $("#crNote").innerHTML = `English SMS texts ${cr.all_en_approved ? "· all approved" : "· every text must be approved before the pilot"}${cr.drafts ? ` · ${cr.drafts} draft(s) waiting` : ""}${has("content:read") ? ' · <a href="content.html">open the content editor</a>' : ""}`;
   }
   $("#fbPests").innerHTML = f.by_pest.filter((p) => p.answered).map((p) => `<div class="bar"><span>${esc(p.pest_name)}</span><div class="track"><i style="width:${100 * p.helped_rate}%"></i></div><b>${pct(p.helped_rate)}</b></div>`).join("");
 }
@@ -483,11 +557,11 @@ function renderFieldTest(ft) {
 // ---------------- rendering (same for live and demo) ----------------
 function renderStats(s) {
   $("#kpis").innerHTML = [
-    ["Registered farmers", n(s.farmers), `+${n(s.farmers_new_30d)} in the last 30 days`],
-    ["SMS sent", n(s.sms_sent), s.sms ? `${n(s.sms.queued)} waiting · ${n(s.sms.failed)} failed` : "advice, replies and alerts", s.sms?.failed > 0],
-    ["Reports to check", n(s.reports_to_check), `${n(s.pest_reports_7d)} reports in 7 days`, s.reports_to_check > 0],
-    ["Open questions", n(s.open_questions), `${n(s.hotspots)} hotspot(s) in ${n(s.counties_flagged)} county(ies)`, s.open_questions > 0]
-  ].map(([l, v, d, alert]) => `<div class="card kpi ${alert ? "alert" : ""}"><div class="l">${l}</div><div class="v">${v}</div><div class="muted">${d}</div></div>`).join("");
+    ["Registered farmers", n(s.farmers), `+${n(s.farmers_new_30d)} in the last 30 days`, false, "users", ""],
+    ["SMS sent", n(s.sms_sent), s.sms ? `${n(s.sms.queued)} waiting · ${n(s.sms.failed)} failed` : "advice, replies and alerts", s.sms?.failed > 0, "send", "blue"],
+    ["Reports to check", n(s.reports_to_check), `${n(s.pest_reports_7d)} reports in 7 days`, s.reports_to_check > 0, "bug", "red"],
+    ["Open questions", n(s.open_questions), `${n(s.hotspots)} hotspot(s) in ${n(s.counties_flagged)} county(ies)`, s.open_questions > 0, "messages-square", "gold"]
+  ].map(([l, v, d, alert, icon, tone]) => `<div class="card kpi ${alert ? "kpi-alert" : ""}"><div class="top-row"><div class="l">${l}</div><span class="h-ic ${tone}">${ic(icon)}</span></div><div class="v">${v}</div><div class="muted">${d}</div></div>`).join("");
 
   const max = Math.max(1, ...s.by_county.map((c) => c.farmers));
   $("#counties").innerHTML = s.by_county.length
@@ -503,12 +577,13 @@ function renderStats(s) {
 let hotspotAlerts = [];
 function alertNote(h) {
   const a = hotspotAlerts.find((x) => x.pest === h.pest && x.county === h.county);
-  return a ? `<div class="muted" title="SMS sent to officers ${esc(a.created_at)} UTC">📱 ${a.sent_to ? `${n(a.sent_to)} officer${a.sent_to === 1 ? "" : "s"} texted` : "no officer phone"}</div>` : "";
+  return a ? `<div class="muted" title="SMS sent to officers ${esc(a.created_at)} UTC" style="font-size:12px;margin-top:4px">${ic("bell")} ${a.sent_to ? `${n(a.sent_to)} officer${a.sent_to === 1 ? "" : "s"} texted` : "no officer phone"}</div>` : "";
 }
 function renderHotspots(list) {
   $("#hotspotTable").innerHTML = list.length
-    ? `<tr><th>Pest</th><th>County</th><th>Reports</th><th>Level</th><th></th></tr>` +
-      list.map((h, i) => `<tr><td>${esc(h.pest_name)}</td><td>${esc(h.county)}</td><td class="num">${h.reports}</td><td><span class="status l-${esc(h.level)}">${esc(h.level)}</span>${alertNote(h)}</td><td>${has("broadcasts:send") ? `<button class="act warn" onclick="warnFarmers(${i})">Warn farmers</button>` : ""}</td></tr>`).join("")
+    ? `<tr><th>Pest · county</th><th style="text-align:right">Reports</th><th>Level</th></tr>` +
+      list.map((h, i) => `<tr><td><b>${esc(h.pest_name)}</b><div class="muted">${esc(h.county)}</div>${alertNote(h)}</td><td class="num">${h.reports}</td>
+        <td><span class="status l-${esc(h.level)}">${esc(h.level)}</span>${has("broadcasts:send") ? `<div style="margin-top:8px"><button class="act warn" onclick="warnFarmers(${i})">${ic("megaphone")} Warn farmers</button></div>` : ""}</td></tr>`).join("")
     : '<tr><td class="empty">No hotspots. When 3 farmers in one county report the same pest within 7 days, it shows here.</td></tr>';
   renderHotspots.list = list;
 }
@@ -534,9 +609,9 @@ function renderQuestions(list) {
       list.map((q) => {
         const isCallback = q.kind === "callback";
         const waiting = q.status === "open" || q.status === "escalated";
-        const text = isCallback ? "📞 Wants a call-back" + (q.body ? `<div class="muted">${esc(q.body)}</div>` : "") : esc(q.body ?? "");
+        const text = isCallback ? `${ic("phone")} Wants a call-back` + (q.body ? `<div class="muted">${esc(q.body)}</div>` : "") : esc(q.body ?? "");
         const photo = q.has_photo ? `<img class="qphoto" data-qphoto="${q.id}" alt="Photo from the farmer" title="Open the photo" onclick="openPhoto(${q.id})">` : "";
-        const who = `<div class="muted" style="font-size:12px;margin-top:4px">👤 ${q.assigned_name ? esc(q.assigned_name) : "Not assigned"}${waiting && me && q.assigned_to !== me.id && has("questions:write") ? ` <button class="act ghost" style="padding:2px 8px" onclick="takeQuestion(${q.id})">Take it</button>` : ""}</div>`;
+        const who = `<div class="assignee">${ic("user")} ${q.assigned_name ? esc(q.assigned_name) : "Not assigned"}${waiting && me && q.assigned_to !== me.id && has("questions:write") ? ` <button class="act ghost" style="padding:2px 8px" onclick="takeQuestion(${q.id})">Take it</button>` : ""}</div>`;
         const action = !waiting ? (q.answer ? `<div class="muted">↳ ${esc(q.answer)}</div>` : "")
           : isCallback
             ? `<div class="answer"><button class="act" onclick="answer(${q.id}, true)">Mark as called</button></div>`
@@ -573,7 +648,7 @@ async function takeQuestion(id) {
 }
 
 function deliveryLine(sms) {
-  if (!sms) return "📱 App only, no SMS";
+  if (!sms) return `${ic("smartphone")} App only, no SMS`;
   if (!sms.total) return "SMS: none sent";
   const waiting = sms.queued + sms.sending;
   return `SMS: <b>${n(sms.delivered)}</b> delivered · ${n(sms.sent)} sent` + (waiting ? ` · ${n(waiting)} waiting` : "") +
@@ -643,7 +718,7 @@ async function broadcast() {
   $("#bSend").disabled = true;
   try {
     const b = await api("POST", "/api/broadcasts", { ...target(), channels, message: $("#bMsg").value });
-    toast(channels.includes("sms") ? `✅ Queued for ${n(b.queued)} farmer${b.queued === 1 ? "" : "s"}. They go out within seconds.` : `✅ Posted in the app for ${n(b.recipients)} farmer${b.recipients === 1 ? "" : "s"}.`);
+    toast(channels.includes("sms") ? `Queued for ${n(b.queued)} farmer${b.queued === 1 ? "" : "s"}. They go out within seconds.` : `Posted in the app for ${n(b.recipients)} farmer${b.recipients === 1 ? "" : "s"}.`);
     refresh();
   } catch (e) { toast(e.message, true); }
   $("#bSend").disabled = false;
@@ -696,7 +771,7 @@ function renderPrices(all = priceData, flagged = flaggedData, reporters = report
       list.items.map((it) => `<tr><td>${esc(it.name)} <span class="muted">/${esc(it.unit)}</span></td><td class="num">${n(it.price_lrd)}</td><td class="num">${it.change_pct == null ? "–" : (it.change_pct > 0 ? "+" : "") + it.change_pct + "%"}</td><td>${ago(it.reported_at.replace("T", " ").slice(0, 19))} ago</td></tr>`).join("")
     : '<tr><td class="empty">No prices this week for this market.</td></tr>';
   $("#flagged").innerHTML = flagged?.length
-    ? `<p style="margin:10px 0 4px"><b>⚠ Unusual prices to check</b></p>` + flagged.map((p) => `<div class="answer" style="align-items:center"><span style="flex:1;font-size:13.5px">${esc(p.item_name)} at ${esc(p.market_name)}: <b>${n(p.price_lrd)} LRD</b> <span class="muted">(${esc(p.reporter ?? "")})</span></span>${has("prices:write") ? `<button class="act" onclick="setPrice(${p.id},'ok')">Accept</button><button class="act ghost" onclick="setPrice(${p.id},'rejected')">Reject</button>` : ""}</div>`).join("")
+    ? `<p style="margin:10px 0 4px"><b>${ic("triangle-alert")} Unusual prices to check</b></p>` + flagged.map((p) => `<div class="answer" style="align-items:center"><span style="flex:1;font-size:13.5px">${esc(p.item_name)} at ${esc(p.market_name)}: <b>${n(p.price_lrd)} LRD</b> <span class="muted">(${esc(p.reporter ?? "")})</span></span>${has("prices:write") ? `<button class="act" onclick="setPrice(${p.id},'ok')">Accept</button><button class="act ghost" onclick="setPrice(${p.id},'rejected')">Reject</button>` : ""}</div>`).join("")
     : "";
   if (reporters) $("#repCount").textContent = reporters.length;
 }
@@ -821,15 +896,23 @@ async function start() {
   if (API) { try { live = (await fetch(API + "/health")).ok; } catch {} }
   $("#signout").onclick = async () => { await StaffAuth.logout(API); showLogin(); };
   $("#mode").className = "mode " + (live ? "live" : "demo");
-  $("#mode").textContent = live ? "● LIVE data" : "● DEMO: sample data (start the API for live data)";
+  $("#mode").textContent = live ? "Live data" : "Demo: sample data (start the API for live data)";
   $("#footnote").textContent = live ? "Live data from the AgriConnect API. Updates every 5 seconds." : "Prototype: all numbers are sample data.";
   if (live) {
     await start();
   } else {
+    document.body.classList.remove("signed-out"); // demo mode: no login, show everything
+    $("#hello").textContent = "Overview (sample data)";
     $("#bCrop").innerHTML += Object.keys(CROP_GUIDES).map((c) => `<option>${esc(c)}</option>`).join("");
     demo();
   }
   $("#bCounty").onchange = updatePreview; $("#bCrop").onchange = updatePreview; $("#bMsg").oninput = updatePreview;
+  // Highlight the menu item of the section on screen.
+  const links = [...document.querySelectorAll('aside.nav a[href^="#"]')];
+  const seen = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) links.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id));
+  }, { rootMargin: "-30% 0px -60% 0px" });
+  for (const a of links) { const el = document.querySelector(a.getAttribute("href")); if (el) seen.observe(el); }
   updatePreview();
 })();
 </script>
