@@ -23,7 +23,7 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 ```bash
 cd services/api
 npm install
-npm test        # 187 tests (also run on PostgreSQL in CI)
+npm test        # 193 tests (also run on PostgreSQL in CI)
 npm run seed    # demo farmers
 npm run dev
 ```
@@ -36,8 +36,8 @@ npm run dev
 The USSD simulator and the officer dashboard (`/prototype/dashboard.html`) go **LIVE** when the API is running: register farmers on `*347#`, report pests, watch the hotspot appear on the dashboard, then warn farmers and see the SMS arrive.
 Full guide: [docs/dev-setup.md](docs/dev-setup.md). Needs Node.js 22.13 or newer; no database to install.
 
-## Show the demo online (free, on Vercel)
-The farmer app mock-up, the officer dashboard with sample data and the USSD simulator can be put online for free in about 10 minutes, with no server: see **[docs/vercel-demo.md](docs/vercel-demo.md)**. Vercel's Root Directory is `prototype`.
+## Put it on Vercel (free, no server to manage)
+The whole platform runs on Vercel with a free Neon PostgreSQL database: import the repository, add the database and two settings, and deploy. Step by step: **[docs/vercel.md](docs/vercel.md)**. Set `DEMO_MODE=1` to show every feature with sample data.
 
 ## Put it on a server
 Docker + PostgreSQL + automatic HTTPS + daily checked backups: see **[docs/deploy.md](docs/deploy.md)**.

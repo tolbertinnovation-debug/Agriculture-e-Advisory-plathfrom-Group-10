@@ -13,7 +13,7 @@ import { adviceForFarmer } from "./engine.js";
 import { sendSms, deliverQueued, requeueStuck } from "./messaging.js";
 import { getFarmer } from "./farmers.js";
 import { refreshWeather, sendWeatherAlerts, getForecast } from "./weather.js";
-import { backupDatabase, recordError } from "./ops.js";
+import { backupDatabase, recordError, restoreDrill } from "./ops.js";
 
 export const REMINDER_DAYS = 28;
 export const WEEKLY_CAP = 3;
@@ -191,4 +191,46 @@ export async function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs 
     weatherTimer = setInterval(run, weatherEveryHours * 3600 * 1000);
   }
   return () => { clearInterval(sendTimer); if (dailyTimer) clearInterval(dailyTimer); if (weatherTimer) clearInterval(weatherTimer); };
+}
+
+// ---------------------------------------------------------------- serverless hosting (Vercel)
+// On a serverless host nothing runs between requests, so the same work is done in short bursts:
+// drainQueue() after requests that may have queued SMS, minuteJobs() at most once a minute, and
+// dailyJobs() from a scheduled call (Vercel Cron). Each is safe to run on several instances at once.
+
+/** Send queued SMS for up to `budgetMs`. */
+export async function drainQueue(ctx, provider, { budgetMs = 8000 } = {}) {
+  const total = { sent: 0, retrying: 0, failed: 0 };
+  const started = Date.now();
+  for (;;) {
+    const r = await deliverQueued(ctx.db, provider, { now: ctx.now(), limit: SEND_BATCH });
+    for (const k of Object.keys(total)) total[k] += r[k];
+    if (r.sent + r.retrying + r.failed < SEND_BATCH || Date.now() - started > budgetMs) break;
+  }
+  return total;
+}
+
+/** Approved texts from other instances, and questions waiting over 24 hours. */
+export async function minuteJobs(ctx) {
+  await applyApprovedTexts(ctx.db, ctx.content);
+  return escalateOverdue(ctx);
+}
+
+/**
+ * Once a day: weather, crop advice, "Did it help?", escalations, and a restore drill (which also proves
+ * the whole database can be exported). Returns what was done.
+ */
+export async function dailyJobs(ctx, provider, { adviceHour = 7, scheduler = true, weather = true, weatherUrl, drill = true, log = console } = {}) {
+  const done = {};
+  const step = async (name, fn) => {
+    try { done[name] = await fn(); } catch (err) { done[name] = { error: err.message }; await recordError(ctx.db, err, { job: name }); }
+  };
+  if (weather) await step("weather", () => weatherCycle(ctx, { url: weatherUrl, log }).then((r) => ({ updated: r.updated, failed: r.failed.length, alerts: r.alerts.length })));
+  // A scheduled call may come at any time of day: "due" means not yet run today.
+  if (scheduler) await step("advice", async () => ((await adviceRunDue(ctx.db, ctx.now(), 0)) ? runAdviceJob(ctx, { trigger: "schedule" }) : "already ran today"));
+  if (scheduler) await step("feedback", async () => ((await feedbackRunDue(ctx.db, ctx.now(), 0)) ? runFeedbackJob(ctx) : "already ran today"));
+  await step("minute", () => minuteJobs(ctx));
+  if (drill) await step("restore_drill", async () => { const r = await restoreDrill(ctx.db, { now: ctx.now() }); return { ok: r.ok, rows: r.rows }; });
+  await step("sms", () => drainQueue(ctx, provider, { budgetMs: 15000 }));
+  return done;
 }

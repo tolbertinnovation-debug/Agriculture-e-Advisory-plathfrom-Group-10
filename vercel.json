@@ -1,7 +1,21 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "redirects": [
-    { "source": "/", "destination": "/demo.html", "permanent": false }
+  "framework": null,
+  "installCommand": "npm ci --prefix services/api",
+  "buildCommand": "node services/api/scripts/vercel-build.js",
+  "outputDirectory": "public",
+  "regions": ["lhr1"],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "{content,prototype,apps/farmer}/**",
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ],
+  "crons": [
+    { "path": "/api/cron/daily", "schedule": "0 7 * * *" }
   ],
   "headers": [
     {
@@ -10,6 +24,7 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "same-origin" },
         { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000" },
         { "key": "Permissions-Policy", "value": "camera=(self), microphone=(), geolocation=()" },
         { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" }
       ]

@@ -416,6 +416,23 @@ CREATE INDEX IF NOT EXISTS idx_questions_phone ON questions(phone);
 ];
 
 export async function migrate(db) {
+  if (db.dialect === "postgres") {
+    // Several servers (or serverless instances) may start at the same moment: a database lock
+    // makes them take turns, so each migration runs exactly once.
+    return db.tx(async (t) => {
+      await t.get("SELECT pg_advisory_xact_lock(4711347) AS locked");
+      await t.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)`);
+      const done = new Set((await t.all("SELECT version FROM schema_migrations")).map((r) => Number(r.version)));
+      const applied = [];
+      for (const m of MIGRATIONS) {
+        if (done.has(m.version)) continue;
+        await m.up(t);
+        await t.run("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)", m.version, m.name, sqlNow());
+        applied.push(m.version);
+      }
+      return applied;
+    });
+  }
   await db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)`);
   const done = new Set((await db.all("SELECT version FROM schema_migrations")).map((r) => Number(r.version)));
   const applied = [];

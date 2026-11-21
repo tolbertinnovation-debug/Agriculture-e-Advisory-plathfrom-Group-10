@@ -3,6 +3,8 @@ import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { timingSafeEqual } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { COUNTIES, findCounty, normalizePhone } from "./geo.js";
 import { adviceForFarmer } from "./engine.js";
 import { cleanFarmerInput, createFarmer, getFarmer, getFarmerByPhone, listFarmers, countFarmers, countFarmersByCounty, farmerHistory, updateFarmer, exportFarmersCsv, FARMER_STATUSES } from "./farmers.js";
@@ -67,11 +69,16 @@ export function createApp({
   trustProxy = process.env.TRUST_PROXY === "1",
   backupDir = process.env.BACKUP_DIR,
   backupKeep = Number(process.env.BACKUP_KEEP ?? 14),
-  rateLimits = true
+  rateLimits = true,
+  // DEMO_MODE=1: a public demo with sample data and no real SMS (SMS_PROVIDER=log only). Sign-in codes are
+  // shown on screen and the simulator can read any phone's SMS. Never with real farmers: the readiness
+  // check blocks the pilot while it is on, and it is refused with a real SMS provider.
+  demoMode = process.env.DEMO_MODE === "1"
 }) {
+  if (demoMode && providerName !== "log") throw new Error("DEMO_MODE=1 is only allowed with SMS_PROVIDER=log (no real SMS). Turn DEMO_MODE off before connecting an SMS provider.");
   const ctx = { db, content, now };
   // What the readiness check should know about this server's own settings.
-  const readinessEnv = { NODE_ENV: production ? "production" : process.env.NODE_ENV, REQUIRE_2FA: require2fa ? "1" : "", SMS_PROVIDER: providerName, WEBHOOK_SECRET: webhookSecret || "", BACKUP_DIR: backupDir || "" };
+  const readinessEnv = { NODE_ENV: production ? "production" : process.env.NODE_ENV, REQUIRE_2FA: require2fa ? "1" : "", SMS_PROVIDER: providerName, WEBHOOK_SECRET: webhookSecret || "", BACKUP_DIR: backupDir || "", DEMO_MODE: demoMode ? "1" : "", HOSTING: process.env.VERCEL ? "vercel" : "" };
   const guards = staffGuards({ db, now, enabled: staffAuth });
   const { staff, need } = guards;
   const gateway = webhookGuard(webhookSecret);
@@ -107,10 +114,10 @@ export function createApp({
   // for offline pest diagnosis, so the two can never disagree.
   app.get("/app/engine.js", async (req, res) => res.type("application/javascript").sendFile(resolve(HERE, "engine.js")));
   app.use("/app", express.static(FARMER_APP_DIR));
-  app.get("/", async (req, res) => res.redirect("/app/"));
+  app.get("/", async (req, res) => res.redirect(demoMode ? "/prototype/demo.html" : "/app/"));
 
   // Liveness: the process answers. Readiness: the database answers too (used by Docker and uptime monitors).
-  app.get("/health", async (req, res) => res.json({ ok: true, service: "agriconnect-api", time: now().toISOString() }));
+  app.get("/health", async (req, res) => res.json({ ok: true, service: "agriconnect-api", time: now().toISOString(), ...(demoMode ? { demo: true } : {}) }));
   app.get("/ready", async (req, res) => {
     try {
       await db.get("SELECT 1 AS x");
@@ -347,7 +354,7 @@ export function createApp({
   // In development (SMS_PROVIDER=log, nothing reaches real phones) the USSD simulator reads one
   // phone's inbox without logging in. Otherwise only admins can read messages.
   // Never in production: the inbox holds farmers' sign-in codes.
-  const demoInbox = providerName === "log" && !production;
+  const demoInbox = providerName === "log" && (!production || demoMode);
   const [mustLogIn, mayReadMessages] = need("messages:read");
   const messagesGuard = (req, res, next) =>
     demoInbox && req.query.phone ? next() : mustLogIn(req, res, () => mayReadMessages(req, res, next));
@@ -499,6 +506,22 @@ export function createApp({
     const result = await backupDatabase(db, backupDir, { now: now(), keep: backupKeep });
     await audit(db, req.staff, "backup.run", result.file.split(/[\\/]/).pop(), { ok: result.ok, bytes: result.bytes });
     res.json({ ...result, file: result.file.split(/[\\/]/).pop(), kept: listBackupFiles(backupDir).length });
+  });
+
+  // Download a checked backup of the whole database, to keep a copy off the server (Google Drive, a laptop).
+  // Works on any host, including Vercel where there is no backup folder.
+  app.get("/api/admin/backup/download", ...need("audit:read"), async (req, res) => {
+    const dir = mkdtempSync(resolve(tmpdir(), "agri-dl-"));
+    try {
+      const result = await backupDatabase(db, dir, { now: now(), keep: 1 });
+      if (!result.ok) return res.status(500).json({ error: `The backup failed its check: ${result.error ?? result.integrity}` });
+      const name = result.file.split(/[\\/]/).pop();
+      await audit(db, req.staff, "backup.download", name, { bytes: result.bytes });
+      res.set("Cache-Control", "no-store");
+      await new Promise((ok, fail) => res.download(result.file, name, (err) => (err ? fail(err) : ok())));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   farmerRoutes(app, ctx, { exposeDevCode: demoInbox }); // the sign-in code on screen: local demo only

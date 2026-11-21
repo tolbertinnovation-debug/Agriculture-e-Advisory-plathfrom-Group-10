@@ -14,11 +14,13 @@ export async function pilotReadiness(db, content, { env = process.env, now = new
 
   // ---- Server settings
   add("Server", "Runs in production mode", env.NODE_ENV === "production", "NODE_ENV=production");
+  add("Server", "Demo mode is off", env.DEMO_MODE !== "1", env.DEMO_MODE === "1" ? "DEMO_MODE=1 shows sign-in codes on screen: turn it off before real farmers join" : "off");
   add("Server", "2-step login is required for all staff", env.REQUIRE_2FA === "1", "REQUIRE_2FA=1");
   const provider = env.SMS_PROVIDER ?? "log";
   add("Server", "A real SMS provider is set", provider !== "log", provider === "log" ? "SMS_PROVIDER is 'log': nothing reaches phones" : `SMS_PROVIDER=${provider}`);
   add("Server", "Telco webhooks need the secret", !!env.WEBHOOK_SECRET, "WEBHOOK_SECRET");
-  add("Server", "Daily backups are on", !!env.BACKUP_DIR, env.BACKUP_DIR ? `BACKUP_DIR=${env.BACKUP_DIR}` : "BACKUP_DIR is not set");
+  if (env.HOSTING === "vercel") add("Server", "Database backups are on", true, "on Vercel the database host (Neon) keeps the backups: check its restore window", false);
+  else add("Server", "Daily backups are on", !!env.BACKUP_DIR, env.BACKUP_DIR ? `BACKUP_DIR=${env.BACKUP_DIR}` : "BACKUP_DIR is not set");
   add("Server", "PostgreSQL database", db.dialect === "postgres", db.dialect === "postgres" ? "DATABASE_URL" : "SQLite: fine for a laptop, use PostgreSQL on the server", false);
 
   // ---- Staff
