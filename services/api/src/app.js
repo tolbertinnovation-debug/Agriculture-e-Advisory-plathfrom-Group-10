@@ -1,4 +1,5 @@
 // The HTTP API. createApp() takes its database and content so tests can pass in-memory ones.
+import { isOn } from "./flags.js";
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -73,7 +74,7 @@ export function createApp({
   // DEMO_MODE=1: a public demo with sample data and no real SMS (SMS_PROVIDER=log only). Sign-in codes are
   // shown on screen and the simulator can read any phone's SMS. Never with real farmers: the readiness
   // check blocks the pilot while it is on, and it is refused with a real SMS provider.
-  demoMode = process.env.DEMO_MODE === "1"
+  demoMode = isOn(process.env.DEMO_MODE)
 }) {
   if (demoMode && providerName !== "log") throw new Error("DEMO_MODE=1 is only allowed with SMS_PROVIDER=log (no real SMS). Turn DEMO_MODE off before connecting an SMS provider.");
   const ctx = { db, content, now };
