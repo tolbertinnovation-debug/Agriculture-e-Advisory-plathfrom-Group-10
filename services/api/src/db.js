@@ -375,6 +375,31 @@ CREATE TABLE IF NOT EXISTS question_photos (
 );
 `, t.dialect));
     }
+  },
+  {
+    version: 6,
+    name: "content editor: advice texts drafted by editors, approved by agronomists",
+    async up(t) {
+      await t.exec(fill(`
+-- Every version of an SMS advice text. The live text is the newest approved one;
+-- without one, the text from the content/ files is used (shown as "not reviewed").
+CREATE TABLE IF NOT EXISTS content_texts (
+  id            {{ID}},
+  item          TEXT NOT NULL,                     -- stage:<crop>:<stage> | pest:<pest>
+  lang          TEXT NOT NULL,                     -- en | kpe | bsq | kss
+  text          TEXT NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'draft',     -- draft | approved | rejected | replaced
+  author_id     INTEGER,
+  author_name   TEXT,
+  reviewer_id   INTEGER,
+  reviewer_name TEXT,
+  note          TEXT,                              -- why it was rejected, or a comment
+  created_at    TEXT NOT NULL,
+  decided_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_content_texts ON content_texts(item, lang, status);
+`, t.dialect));
+    }
   }
 ];
 
@@ -397,7 +422,7 @@ export async function migrate(db) {
 export const TABLES = [
   "farmers", "farmer_crops", "pest_reports", "questions", "broadcasts", "message_log", "advice_sends", "job_runs",
   "otp_codes", "farmer_sessions", "weather_forecasts", "weather_alerts", "market_reporters", "prices",
-  "staff", "staff_sessions", "audit_log", "backups", "error_log", "registrations", "ussd_signups", "feedback_requests", "hotspot_alerts", "question_photos"
+  "staff", "staff_sessions", "audit_log", "backups", "error_log", "registrations", "ussd_signups", "feedback_requests", "hotspot_alerts", "question_photos", "content_texts"
 ];
 
 // ---------------------------------------------------------------- SQLite

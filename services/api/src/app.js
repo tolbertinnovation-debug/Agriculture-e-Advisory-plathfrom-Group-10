@@ -24,6 +24,7 @@ import { createRegistration, listRegistrations, getRegistration, resendRegistrat
 import { securityHeaders, cors, rateLimit } from "./http.js";
 import { recordError, systemStatus, recentErrors, backupDatabase, listBackupFiles } from "./ops.js";
 import { signupFunnel, feedbackSummary, runFeedbackJob } from "./fieldTest.js";
+import { listContent, draftText, decideDraft, approveAsIs, textHistory } from "./contentEditor.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROTOTYPE_DIR = resolve(HERE, "../../../prototype");
@@ -435,6 +436,27 @@ export function createApp({
   });
 
   // ---- Admin: system status, errors, backups ----
+  // ---- Content editor: editors draft advice texts, agronomists approve them ----
+  app.get("/api/content/texts", ...need("content:read"), async (req, res) => res.json(await listContent(db, content)));
+  app.get("/api/content/texts/history", ...need("content:read"), async (req, res) =>
+    res.json(await textHistory(db, String(req.query.item ?? ""), String(req.query.lang ?? "en"))));
+  app.post("/api/content/texts", ...need("content:edit"), async (req, res) => {
+    const d = await draftText(db, content, req.staff, req.body ?? {});
+    await audit(db, req.staff, "content.draft", `${d.item}/${d.lang}`, { text: d.text });
+    res.status(201).json(d);
+  });
+  app.post("/api/content/texts/:id/decide", ...need("content:approve"), async (req, res) => {
+    const d = await decideDraft(db, content, req.staff, Number(req.params.id), { approve: req.body?.approve === true, note: req.body?.note });
+    if (!d) return res.status(404).json({ error: "Draft not found" });
+    await audit(db, req.staff, `content.${d.status === "approved" ? "approve" : "reject"}`, `${d.item}/${d.lang}`, { text: d.text, note: d.note });
+    res.json(d);
+  });
+  app.post("/api/content/texts/approve-as-is", ...need("content:approve"), async (req, res) => {
+    const d = await approveAsIs(db, content, req.staff, req.body ?? {});
+    await audit(db, req.staff, "content.approve", `${d.item}/${d.lang}`, { text: d.text, as_is: true });
+    res.status(201).json(d);
+  });
+
   // ---- Field-test measures (MVP exit criteria) ----
   // USSD sign-up completion has no county (people give up before choosing one), so it covers everyone.
   app.get("/api/field-test", ...need("stats:read"), async (req, res) => {
@@ -442,7 +464,8 @@ export function createApp({
     res.json({
       days,
       ussd_signup: await signupFunnel(db, { days, now: now() }),
-      did_it_help: await feedbackSummary(db, content, { days, now: now(), counties: scopeCounties(req, req.query.county) })
+      did_it_help: await feedbackSummary(db, content, { days, now: now(), counties: scopeCounties(req, req.query.county) }),
+      content_review: (await listContent(db, content)).progress
     });
   });
   app.post("/api/jobs/feedback/run", ...need("jobs:run"), async (req, res) => {

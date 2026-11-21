@@ -38,8 +38,13 @@ Everyone who uses the dashboard has their own account. `npm run seed` creates th
 | editor | editor@agriconnect.test | demo-editor-2026 | market prices, reporters, weather refresh, advice job |
 | viewer | partner@agriconnect.test | demo-viewer-2026 | numbers and hotspots only, no personal data |
 | lead | kerkula@agriconnect.test | demo-lead-2026 | lead farmer: registers farmers in **Bong only**; sees only their own invitations |
+| agronomist | agronomist@agriconnect.test | demo-agronomist-2026 | approves or rejects advice texts in *Advice content* before farmers get them |
 
 **Assisted sign-up.** Officers and lead farmers register farmers on the dashboard (*Register a farmer*). The farmer gets an SMS and **joins only when they reply YES** (or answer the first `*347#` screen). NO, or no answer within 7 days, means nothing is kept. Invitations can be resent at most twice. Only admins can add farmers directly (`POST /api/farmers`, e.g. from signed paper forms).
+
+**Advice content (Sprint 5).** Open *📝 Advice content* (`prototype/content.html`). Every SMS farmers get, each crop stage and each Pest Doctor reply, is listed with its status: *Not reviewed* (the text from `content/`), *Draft* (waiting) or *Approved by …*. Editors (`editor@agriconnect.test`) write drafts; agronomists (`agronomist@agriconnect.test` / `demo-agronomist-2026`) approve them, reject them with a note, or approve a file text *as written*. Nobody can approve their own draft. Translations (Kpelle, Bassa, Kissi) go to farmers who chose that language only once approved; until then they get English. The Field test card shows how many English texts are approved: all of them is an MVP exit criterion. Approved texts are stored in the database (`content_texts`) and laid over the files at every start; the files stay the starting point.
+
+**Rain override.** A crop stage with `"hold_in_rain": true` in `content/crops/*.json` (rice harvest and drying) is not sent while heavy rain is forecast for the farmer's county; it goes out on the first clear day (the daily job counts these as `rain_hold`).
 
 **Ask an Expert (Sprint 4).**
 - **From the app:** farmers can add a photo (shrunk on the phone, so it is small and waits in the outbox when offline) or tap *Ask an officer to call me*.
@@ -238,6 +243,11 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | GET 🔒 | `/api/questions?status=open&mine=1` | Questions (overdue first); `open` includes overdue ones; `mine=1` = assigned to me |
 | GET 🔒 | `/api/questions/:id/photo` | The photo sent with a question (officers: their counties) |
 | PATCH 🔒 | `/api/questions/:id/assign` | `{staff_id: "me"}` to take a question; admins can pass any officer's id (or `null`) |
+| GET 🔒 | `/api/content/texts` | Every advice text with its live version, draft and review progress (editors, agronomists) |
+| POST 🔒 | `/api/content/texts` | `{item, lang, text}`: save a draft (e.g. item `stage:rice:planting`, `pest:fall-armyworm`) |
+| POST 🔒 | `/api/content/texts/:id/decide` | Agronomist: `{approve: true}` or `{approve: false, note}` |
+| POST 🔒 | `/api/content/texts/approve-as-is` | Agronomist: `{item, lang}` approve the file text unchanged |
+| GET 🔒 | `/api/content/texts/history?item=&lang=` | Every version of one text |
 | GET 🔒 | `/api/hotspots/alerts` | SMS alerts sent to officers about hotspots (officers: their counties) |
 | POST 🔒 | `/api/staff/me/phone` | `{phone}`: your own phone for hotspot alerts (`""` removes it) |
 | GET 🔒 | `/api/field-test?days=30` | Field-test measures: `*347#` sign-up completion (target 80%) with where people stopped, and "Did it help?" answers by pest |

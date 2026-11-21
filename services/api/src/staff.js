@@ -12,7 +12,7 @@ import { scryptSync, randomBytes, timingSafeEqual, createHash, createHmac } from
 import { ValidationError } from "./farmers.js";
 import { findCounty, normalizePhone } from "./geo.js";
 
-export const ROLES = ["admin", "officer", "editor", "viewer", "lead"];
+export const ROLES = ["admin", "officer", "editor", "viewer", "lead", "agronomist"];
 /** Roles that only work in their own counties. */
 export const AREA_ROLES = ["officer", "lead"];
 export const isAreaLimited = (staff) => AREA_ROLES.includes(staff?.role);
@@ -24,7 +24,9 @@ export const PERMISSIONS = {
     "questions:read", "questions:write", "broadcasts:read", "broadcasts:send",
     "prices:read", "jobs:read", "weather:run"
   ],
-  editor: ["stats:read", "hotspots:read", "prices:read", "prices:write", "reporters:write", "jobs:read", "jobs:run", "weather:run", "broadcasts:read"],
+  editor: ["stats:read", "hotspots:read", "prices:read", "prices:write", "reporters:write", "jobs:read", "jobs:run", "weather:run", "broadcasts:read", "content:read", "content:edit"],
+  // Agronomists (e.g. CARI / MOA) check advice texts: nothing reaches farmers until one approves it.
+  agronomist: ["stats:read", "hotspots:read", "content:read", "content:edit", "content:approve"],
   viewer: ["stats:read", "hotspots:read"],
   lead: ["registrations:create", "registrations:read"]
 };

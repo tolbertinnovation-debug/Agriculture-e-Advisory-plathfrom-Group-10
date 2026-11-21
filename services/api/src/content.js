@@ -48,6 +48,7 @@ export function validateContent({ crops, pests, symptoms, ussdSymptoms = [], rep
         if (stage.from_week <= previousEnd) errors.push(`${where}: overlaps the previous stage`);
         previousEnd = stage.to_week;
       }
+      if (stage.hold_in_rain !== undefined && typeof stage.hold_in_rain !== "boolean") errors.push(`${where}: hold_in_rain must be true or false`);
       tooLong(`${where} (en)`, stage.sms?.en);
       for (const [lang, text] of Object.entries(stage.sms ?? {})) if (lang !== "en") tooLong(`${where} (${lang})`, text);
     }

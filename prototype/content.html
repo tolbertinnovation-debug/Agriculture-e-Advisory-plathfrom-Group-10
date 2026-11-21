@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgriConnect — Advice content</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { background: var(--paper); }
+  main { max-width: 1100px; margin: 0 auto; padding: 26px 20px 60px; display: flex; flex-direction: column; gap: 16px; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .top h1 { margin: 0; font-size: 24px; }
+  .act { border: 0; border-radius: 8px; font-weight: 800; font-size: 12.5px; padding: 7px 11px; cursor: pointer; background: var(--forest); color: #fff; text-decoration: none; display: inline-block; }
+  .act.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--ink); }
+  .act.danger { background: var(--red-soft); color: var(--red); }
+  .act:disabled { opacity: .5; cursor: default; }
+  .status { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+  .ok { background: var(--leaf-soft); color: var(--forest); } .todo { background: var(--gold-soft); color: #7A5A0B; } .grey { background: #ECEAE4; color: var(--muted); } .bad { background: var(--red-soft); color: var(--red); }
+  .progress { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .progress .v { font-size: 30px; font-weight: 800; color: var(--forest); font-variant-numeric: tabular-nums; }
+  .progress .l { font-size: 13px; font-weight: 700; }
+  .track { height: 10px; background: var(--leaf-soft); border-radius: 6px; overflow: hidden; margin-top: 6px; }
+  .track i { display: block; height: 100%; background: var(--leaf); }
+  .tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .tools select { width: auto; font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tabs button { border: 1.5px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 13px; cursor: pointer; }
+  .tabs button.on { background: var(--forest); color: #fff; border-color: var(--forest); }
+  h2 { font-size: 16px; margin: 10px 0 0; }
+  .item { display: grid; grid-template-columns: 220px 1fr; gap: 16px; }
+  .item .name { font-weight: 800; }
+  .item .status { white-space: normal; display: inline-block; line-height: 1.4; }
+  .live { font-size: 14.5px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .draft { background: var(--gold-soft); border: 1px solid #E8D39A; border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: 14.5px; }
+  .row-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+  textarea { width: 100%; font: inherit; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; box-sizing: border-box; }
+  input.note { flex: 1; min-width: 160px; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); }
+  .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .count.over { color: var(--red); font-weight: 800; }
+  details summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .hist div { font-size: 13px; border-top: 1px dashed var(--line); padding: 6px 0; }
+  .hide { display: none !important; }
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--forest); color: #fff; padding: 14px 18px; border-radius: 12px; font-weight: 700; display: none; max-width: 420px; z-index: 5; }
+  #toast.bad { background: var(--red); }
+  @media (max-width: 860px) { .item, .progress { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><div class="eyebrow">AgriConnect · Officer portal</div><h1>Advice content</h1></div>
+    <div style="display:flex;gap:8px;align-items:center"><a class="act ghost" href="dashboard.html">← Dashboard</a><button class="act ghost hide" id="signout">Sign out</button></div>
+  </div>
+  <div class="card hide" id="login"><h3>Staff login</h3><div id="loginForm"></div></div>
+
+  <div id="page" class="hide" style="display:contents">
+    <div class="card">
+      <p class="muted" style="margin:0 0 12px">Every SMS farmers get comes from here. <b>Editors</b> write drafts; an <b>agronomist</b> approves each text before farmers get it. Nobody approves their own draft. Before the pilot, every English text must be approved.</p>
+      <div class="progress">
+        <div><div class="l">English texts approved by an agronomist</div><div class="v" id="pEn">–</div><div class="track"><i id="pEnBar" style="width:0"></i></div></div>
+        <div><div class="l">Translations approved</div><div class="v" id="pTr">–</div><div class="muted" style="font-size:13px">Kpelle, Bassa, Kissi. Farmers get English until a translation is approved.</div></div>
+        <div><div class="l">Drafts waiting for review</div><div class="v" id="pDr">–</div></div>
+      </div>
+    </div>
+
+    <div class="tools">
+      <div class="tabs" id="tabs">
+        <button data-tab="drafts">Drafts to review</button>
+        <button data-tab="todo">Not reviewed yet</button>
+        <button data-tab="all">All texts</button>
+      </div>
+      <select id="lang" aria-label="Language"><option value="en">English</option><option value="kpe">Kpelle</option><option value="bsq">Bassa</option><option value="kss">Kissi</option></select>
+    </div>
+
+    <div id="list" style="display:flex;flex-direction:column;gap:12px"></div>
+  </div>
+</main>
+<div id="toast"></div>
+<script src="staff-auth.js"></script>
+<script>
+const API = new URLSearchParams(location.search).get("api") || location.origin;
+const $ = (s) => document.querySelector(s);
+const esc = StaffAuth.esc;
+const LANG = { en: "English", kpe: "Kpelle", bsq: "Bassa", kss: "Kissi" };
+let me = null, data = null, tab = "drafts";
+const can = (p) => !!me?.permissions?.includes(p);
+
+function toast(text, bad = false) {
+  const t = $("#toast"); t.textContent = text; t.className = bad ? "bad" : ""; t.style.display = "block";
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => (t.style.display = "none"), 4000);
+}
+async function api(method, path, body) {
+  try { return await StaffAuth.api(API, method, path, body); }
+  catch (e) { if (e.login) showLogin(); throw e; }
+}
+function showLogin() {
+  $("#login").classList.remove("hide"); $("#page").classList.add("hide"); $("#signout").classList.add("hide");
+  StaffAuth.loginForm($("#loginForm"), API, () => start());
+}
+const day = (t) => (t ? String(t).slice(0, 10) : "");
+
+function renderProgress(p) {
+  $("#pEn").textContent = `${p.en.approved} / ${p.en.total}`;
+  $("#pEnBar").style.width = `${p.en.total ? (100 * p.en.approved) / p.en.total : 0}%`;
+  $("#pEn").style.color = p.all_en_approved ? "var(--forest)" : "#7A5A0B";
+  $("#pTr").textContent = `${p.translations.approved} / ${p.translations.total}`;
+  $("#pDr").textContent = p.drafts;
+}
+
+function itemCard(i, lang) {
+  const t = i.langs[lang];
+  const where = i.kind === "stage" ? `${esc(i.crop_name)} · weeks ${i.weeks[0]} to ${i.weeks[1]}` : "Pest Doctor reply";
+  const badge = !t?.text ? `<span class="status grey">No ${LANG[lang]} text yet</span>`
+    : t.source === "approved" ? `<span class="status ok">✓ Approved by ${esc(t.approved_by ?? "")} ${day(t.approved_at)}</span>`
+    : '<span class="status todo">Not reviewed</span>';
+  const draft = t?.draft;
+  const mineDraft = draft && draft.author_name === me.name;
+  const draftBox = draft ? `<div class="draft"><div class="muted" style="font-size:12px;font-weight:700">DRAFT by ${esc(draft.author_name ?? "")}, ${day(draft.created_at)} · waiting for an agronomist</div>${esc(draft.text)}
+      ${can("content:approve") ? `<div class="row-btns">${mineDraft ? '<span class="muted" style="font-size:13px">You wrote this: another agronomist must approve it.</span>' : `<button class="act" data-approve="${draft.id}">Approve</button>`}
+        <input class="note" data-note="${draft.id}" placeholder="What should change? (needed to reject)"><button class="act danger" data-reject="${draft.id}">Reject</button></div>` : ""}</div>` : "";
+  const asIs = can("content:approve") && t?.source === "file" && !draft ? `<button class="act ghost" data-asis="${esc(i.item)}">Approve as written</button>` : "";
+  const editor = can("content:edit") ? `<details><summary>✏️ ${t?.text ? "Suggest a new text" : `Write the ${LANG[lang]} text`}</summary>
+      <textarea rows="3" maxlength="300" data-text="${esc(i.item)}">${esc(draft?.text ?? t?.text ?? (lang !== "en" ? "" : ""))}</textarea>
+      <div class="row-btns"><button class="act" data-save="${esc(i.item)}">Save as draft</button><span class="count" data-count="${esc(i.item)}"></span></div></details>` : "";
+  const ref = lang !== "en" && i.langs.en?.text ? `<div class="muted" style="font-size:12.5px;margin-top:6px">English: ${esc(i.langs.en.text)}</div>` : "";
+  return `<div class="card item" id="${esc(i.item)}">
+    <div><div class="name">${esc(i.name)}</div><div class="muted" style="font-size:13px">${where}</div>
+      ${i.hold_in_rain ? '<div class="muted" style="font-size:12.5px;margin-top:4px">☔ Waits while heavy rain is forecast</div>' : ""}
+      <div style="margin-top:8px">${badge}</div></div>
+    <div>${t?.text ? `<div class="live">${esc(t.text)} <span class="count">(${t.text.length}/160)</span></div>` : ""}${ref}
+      ${draftBox}<div class="row-btns">${asIs}</div>${editor}
+      <details data-hist="${esc(i.item)}"><summary>History</summary><div class="hist"></div></details></div>
+  </div>`;
+}
+
+function render() {
+  if (!data) return;
+  const lang = $("#lang").value;
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  const show = data.items.filter((i) => {
+    const t = i.langs[lang];
+    if (tab === "drafts") return !!t?.draft;
+    if (tab === "todo") return t?.source !== "approved";
+    return true;
+  });
+  const groups = [];
+  for (const i of show) {
+    const g = i.kind === "stage" ? `${i.crop_name}: crop calendar SMS` : "Pest Doctor replies";
+    (groups.find((x) => x.g === g) ?? (groups.push({ g, items: [] }), groups.at(-1))).items.push(i);
+  }
+  $("#list").innerHTML = groups.length
+    ? groups.map((g) => `<h2>${esc(g.g)}</h2>` + g.items.map((i) => itemCard(i, lang)).join("")).join("")
+    : `<div class="card empty">${tab === "drafts" ? "No drafts waiting. 🎉" : tab === "todo" ? `Every ${LANG[lang]} text is approved. 🎉` : "No texts."}</div>`;
+  document.querySelectorAll("textarea[data-text]").forEach(count);
+}
+function count(ta) {
+  const c = document.querySelector(`[data-count="${CSS.escape(ta.dataset.text)}"]`);
+  if (!c) return;
+  const n = ta.value.trim().length;
+  c.textContent = `${n}/160 characters (one SMS)`;
+  c.classList.toggle("over", n > 160);
+}
+
+async function load() {
+  data = await api("GET", "/api/content/texts");
+  renderProgress(data.progress);
+  render();
+}
+
+document.addEventListener("input", (e) => { if (e.target.matches("textarea[data-text]")) count(e.target); });
+$("#tabs").onclick = (e) => { const b = e.target.closest("button[data-tab]"); if (b) { tab = b.dataset.tab; render(); } };
+$("#lang").onchange = render;
+$("#list").addEventListener("toggle", async (e) => {
+  const d = e.target;
+  if (!d.matches?.("details[data-hist]") || !d.open) return;
+  const h = await api("GET", `/api/content/texts/history?item=${encodeURIComponent(d.dataset.hist)}&lang=${$("#lang").value}`);
+  d.querySelector(".hist").innerHTML = h.length
+    ? h.map((v) => `<div><span class="status ${v.status === "approved" ? "ok" : v.status === "rejected" ? "bad" : v.status === "draft" ? "todo" : "grey"}">${esc(v.status)}</span> ${day(v.created_at)} · by ${esc(v.author_name ?? "")}${v.reviewer_name ? ` · checked by ${esc(v.reviewer_name)}` : ""}${v.note ? ` · <i>${esc(v.note)}</i>` : ""}<br>${esc(v.text)}</div>`).join("")
+    : '<div class="muted">Only the text from the content file so far.</div>';
+}, true);
+$("#list").onclick = async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const lang = $("#lang").value;
+  try {
+    if (b.dataset.save) {
+      const text = document.querySelector(`textarea[data-text="${CSS.escape(b.dataset.save)}"]`).value;
+      await api("POST", "/api/content/texts", { item: b.dataset.save, lang, text });
+      toast("Draft saved. An agronomist will review it.");
+    } else if (b.dataset.approve) {
+      await api("POST", `/api/content/texts/${b.dataset.approve}/decide`, { approve: true });
+      toast("Approved: farmers get this text from now on.");
+    } else if (b.dataset.reject) {
+      const note = document.querySelector(`[data-note="${b.dataset.reject}"]`).value;
+      await api("POST", `/api/content/texts/${b.dataset.reject}/decide`, { approve: false, note });
+      toast("Rejected. The editor sees your note.");
+    } else if (b.dataset.asis) {
+      await api("POST", "/api/content/texts/approve-as-is", { item: b.dataset.asis, lang });
+      toast("Approved as written.");
+    } else return;
+    await load();
+  } catch (ex) { if (!ex.login) toast(ex.message, true); }
+};
+
+async function start() {
+  try { me = await api("GET", "/api/staff/me"); } catch { return; }
+  $("#login").classList.add("hide"); $("#signout").classList.remove("hide");
+  if (!can("content:read")) { $("#page").classList.remove("hide"); $("#list").innerHTML = '<div class="card">Your role cannot see advice content. Ask an admin.</div>'; return; }
+  $("#page").classList.remove("hide");
+  tab = can("content:approve") ? "drafts" : "todo";
+  await load();
+}
+$("#signout").onclick = async () => { await StaffAuth.logout(API); showLogin(); };
+start();
+</script>
+</body>
+</html>
