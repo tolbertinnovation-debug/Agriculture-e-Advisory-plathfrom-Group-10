@@ -355,6 +355,26 @@ CREATE TABLE IF NOT EXISTS hotspot_alerts (
 CREATE INDEX IF NOT EXISTS idx_hotspot_alerts ON hotspot_alerts(pest, county, level, created_at);
 `, t.dialect));
     }
+  },
+  {
+    version: 5,
+    name: "Ask an Expert: photos, routing to an officer, 24-hour escalation",
+    async up(t) {
+      await t.exec("ALTER TABLE questions ADD COLUMN assigned_to INTEGER"); // staff id of the officer who should answer
+      await t.exec("ALTER TABLE questions ADD COLUMN escalated_at TEXT");
+      await t.exec("ALTER TABLE staff ADD COLUMN districts TEXT NOT NULL DEFAULT '[]'"); // JSON: districts an officer covers first
+      await t.exec(fill(`
+CREATE INDEX IF NOT EXISTS idx_questions_assigned ON questions(assigned_to, status);
+-- A photo sent with a question from the farmer app (a small JPEG, resized on the phone).
+CREATE TABLE IF NOT EXISTS question_photos (
+  question_id INTEGER PRIMARY KEY REFERENCES questions(id) ON DELETE CASCADE,
+  mime        TEXT NOT NULL,
+  data        TEXT NOT NULL,                       -- base64
+  bytes       INTEGER NOT NULL,
+  created_at  TEXT NOT NULL
+);
+`, t.dialect));
+    }
   }
 ];
 
@@ -377,7 +397,7 @@ export async function migrate(db) {
 export const TABLES = [
   "farmers", "farmer_crops", "pest_reports", "questions", "broadcasts", "message_log", "advice_sends", "job_runs",
   "otp_codes", "farmer_sessions", "weather_forecasts", "weather_alerts", "market_reporters", "prices",
-  "staff", "staff_sessions", "audit_log", "backups", "error_log", "registrations", "ussd_signups", "feedback_requests", "hotspot_alerts"
+  "staff", "staff_sessions", "audit_log", "backups", "error_log", "registrations", "ussd_signups", "feedback_requests", "hotspot_alerts", "question_photos"
 ];
 
 // ---------------------------------------------------------------- SQLite

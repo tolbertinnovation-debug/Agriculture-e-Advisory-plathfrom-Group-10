@@ -7,7 +7,7 @@ import { COUNTIES, findCounty, normalizePhone } from "./geo.js";
 import { adviceForFarmer } from "./engine.js";
 import { cleanFarmerInput, createFarmer, getFarmer, getFarmerByPhone, listFarmers, countFarmers, countFarmersByCounty, farmerHistory, updateFarmer, exportFarmersCsv, FARMER_STATUSES } from "./farmers.js";
 import { createPestReport, getPestReport, listPestReports, countPestReports, updatePestReport, STATUSES } from "./pestReports.js";
-import { listQuestions, countQuestions, answerQuestion, getQuestion, QUESTION_STATUSES } from "./questions.js";
+import { listQuestions, countQuestions, answerQuestion, getQuestion, getQuestionPhoto, assignQuestion, QUESTION_STATUSES } from "./questions.js";
 import { sqlDaysAgo, isUniqueViolation } from "./db.js";
 import { listHotspots, recentHotspotAlerts } from "./hotspots.js";
 import { previewBroadcast, sendBroadcast, listBroadcasts } from "./broadcasts.js";
@@ -75,7 +75,10 @@ export function createApp({
   app.disable("x-powered-by");
   if (trustProxy) app.set("trust proxy", 1); // behind Caddy / a load balancer: use the real client IP
   app.use(securityHeaders({ https: production }));
-  app.use(express.json({ limit: "100kb" }));
+  // Bodies are small, except a question from the farmer app with a photo (resized on the phone).
+  const smallJson = express.json({ limit: "100kb" });
+  const photoJson = express.json({ limit: "1mb" });
+  app.use((req, res, next) => (req.path === "/api/me/questions" ? photoJson : smallJson)(req, res, next));
   app.use(express.urlencoded({ extended: false, limit: "20kb" })); // USSD/SMS gateways post form data
 
   // CORS: open in development (pages opened from file://), closed in production unless CORS_ORIGINS is set.
@@ -346,7 +349,31 @@ export function createApp({
   // ---- Questions for officers ----
   app.get("/api/questions", ...need("questions:read"), async (req, res) => {
     if (req.query.status && !QUESTION_STATUSES.includes(req.query.status)) return res.status(400).json({ error: `status must be one of ${QUESTION_STATUSES.join(", ")}` });
-    res.json(await listQuestions(db, { counties: scopeCounties(req, req.query.county), status: req.query.status, limit: intParam(req.query.limit, 100, 500) }));
+    const mine = req.query.mine === "1" && req.staff.id != null ? req.staff.id : undefined; // ?mine=1: only questions assigned to me
+    res.json(await listQuestions(db, { counties: scopeCounties(req, req.query.county), status: req.query.status, assignedTo: mine, limit: intParam(req.query.limit, 100, 500) }));
+  });
+
+  app.get("/api/questions/:id/photo", ...need("questions:read"), async (req, res) => {
+    const q = await getQuestion(db, Number(req.params.id));
+    if (!q) return res.status(404).json({ error: "Question not found" });
+    mustCover(req, q.county);
+    const photo = await getQuestionPhoto(db, q.id);
+    if (!photo) return res.status(404).json({ error: "This question has no photo" });
+    res.set("Cache-Control", "private, max-age=3600").set("Content-Security-Policy", "default-src 'none'").type(photo.mime).send(photo.bytes);
+  });
+
+  // Hand a question to an officer: {staff_id} or {staff_id: "me"}; officers can take questions in their counties.
+  app.patch("/api/questions/:id/assign", ...need("questions:write"), async (req, res) => {
+    const q = await getQuestion(db, Number(req.params.id));
+    if (!q) return res.status(404).json({ error: "Question not found" });
+    mustCover(req, q.county);
+    const raw = req.body?.staff_id;
+    const staffId = raw === "me" ? req.staff.id : raw === null ? null : Number(raw);
+    if (staffId !== null && !Number.isInteger(staffId)) return res.status(400).json({ error: "staff_id: a staff id, \"me\" or null" });
+    if (isAreaLimited(req.staff) && staffId !== req.staff.id) throw new AccessError("Officers can take a question for themselves; ask an admin to hand it to someone else");
+    const updated = await assignQuestion(db, q.id, staffId);
+    await audit(db, req.staff, "question.assign", `Q-${q.id}`, { to: updated.assigned_name ?? null });
+    res.json(updated);
   });
 
   app.patch("/api/questions/:id", ...need("questions:write"), async (req, res) => {

@@ -60,6 +60,7 @@
   .field input { font: inherit; font-weight: 400; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
   .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .hide { display: none !important; }
+  .qphoto { display: block; width: 84px; height: 84px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); margin-top: 6px; cursor: zoom-in; background: var(--leaf-soft); }
   .ft { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
   .ft .v { font-size: 34px; font-weight: 800; color: var(--forest); font-variant-numeric: tabular-nums; }
   .ft .v.low { color: var(--red); }
@@ -175,7 +176,7 @@
     <div class="card" id="reports"><h3>Pest reports <span class="muted">newest first</span></h3><div class="scroll"><table id="reportTable"></table></div></div>
 
     <div class="row" id="workRow">
-      <div class="card" id="questions"><h3>Farmer questions</h3><div class="scroll"><table id="questionTable"></table></div></div>
+      <div class="card" id="questions"><h3>Farmer questions <label class="muted" style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="qMine" onchange="refresh()"> Mine only</label></h3><div class="scroll"><table id="questionTable"></table></div></div>
       <div class="card" id="advisory">
         <h3>📣 Send an advisory</h3>
         <div class="form-row">
@@ -522,14 +523,43 @@ function renderQuestions(list) {
     ? `<tr><th>Farmer</th><th>Question</th><th>Age</th><th>Status</th></tr>` +
       list.map((q) => {
         const isCallback = q.kind === "callback";
-        const text = isCallback ? "📞 Wants a call-back" + (q.body ? `<div class="muted">${esc(q.body)}</div>` : "") : esc(q.body);
-        const action = q.status !== "open" ? (q.answer ? `<div class="muted">↳ ${esc(q.answer)}</div>` : "")
+        const waiting = q.status === "open" || q.status === "escalated";
+        const text = isCallback ? "📞 Wants a call-back" + (q.body ? `<div class="muted">${esc(q.body)}</div>` : "") : esc(q.body ?? "");
+        const photo = q.has_photo ? `<img class="qphoto" data-qphoto="${q.id}" alt="Photo from the farmer" title="Open the photo" onclick="openPhoto(${q.id})">` : "";
+        const who = `<div class="muted" style="font-size:12px;margin-top:4px">👤 ${q.assigned_name ? esc(q.assigned_name) : "Not assigned"}${waiting && me && q.assigned_to !== me.id && has("questions:write") ? ` <button class="act ghost" style="padding:2px 8px" onclick="takeQuestion(${q.id})">Take it</button>` : ""}</div>`;
+        const action = !waiting ? (q.answer ? `<div class="muted">↳ ${esc(q.answer)}</div>` : "")
           : isCallback
             ? `<div class="answer"><button class="act" onclick="answer(${q.id}, true)">Mark as called</button></div>`
             : `<div class="answer"><input type="text" id="ans-${q.id}" maxlength="139" placeholder="Reply by SMS…" onkeydown="if(event.key==='Enter')answer(${q.id})"><button class="act" onclick="answer(${q.id})">Send</button></div>`;
-        return `<tr><td><b>${esc(q.phone ?? "")}</b><div class="muted">${esc(q.county ?? "")} · ${esc((q.channel ?? "").toUpperCase())}</div></td><td><div class="q">${text}</div>${action}</td><td>${ago(q.created_at)}</td><td><span class="status s-${isCallback && q.status === "open" ? "callback" : esc(q.status)}">${esc(q.status)}</span></td></tr>`;
+        const badge = q.status === "escalated" ? '<span class="status s-new">Over 24h</span>' : `<span class="status s-${isCallback && q.status === "open" ? "callback" : esc(q.status)}">${esc(q.status)}</span>`;
+        return `<tr><td><b>${esc(q.phone ?? "")}</b><div class="muted">${esc(q.county ?? "")} · ${esc((q.channel ?? "").toUpperCase())}</div></td><td><div class="q">${text}</div>${photo}${action}${who}</td><td>${ago(q.created_at)}</td><td>${badge}</td></tr>`;
       }).join("")
-    : '<tr><td class="empty">No questions yet. Farmers ask with SMS “ASK …” or *347# → 5.</td></tr>';
+    : `<tr><td class="empty">${$("#qMine")?.checked ? "No questions assigned to you." : "No questions yet. Farmers ask with SMS “ASK …”, *347# → 5, or in the app."}</td></tr>`;
+  loadPhotos();
+}
+
+// Photos need the staff login, so they are fetched with it and shown from memory.
+const photoUrls = new Map();
+async function photoUrl(id) {
+  if (!photoUrls.has(id)) {
+    photoUrls.set(id, (async () => {
+      const res = await fetch(`${API}/api/questions/${id}/photo`, { headers: { Authorization: "Bearer " + StaffAuth.get() } });
+      if (!res.ok) throw new Error("Photo not available");
+      return URL.createObjectURL(await res.blob());
+    })().catch((e) => { photoUrls.delete(id); throw e; }));
+  }
+  return photoUrls.get(id);
+}
+function loadPhotos() {
+  document.querySelectorAll("img[data-qphoto]").forEach(async (img) => {
+    try { img.src = await photoUrl(Number(img.dataset.qphoto)); } catch { img.alt = "Photo not available"; }
+  });
+}
+async function openPhoto(id) {
+  try { window.open(await photoUrl(id), "_blank", "noopener"); } catch (e) { toast(e.message, true); }
+}
+async function takeQuestion(id) {
+  try { await api("PATCH", `/api/questions/${id}/assign`, { staff_id: "me" }); toast(`Q-${id} is now yours.`); refresh(); } catch (e) { toast(e.message, true); }
 }
 
 function deliveryLine(sms) {
@@ -694,7 +724,7 @@ async function refresh() {
     const alerts = get("hotspots:read", "/api/hotspots/alerts");
     const [stats, hotspots, reports, questions, broadcasts, jobs, weather, prices, flagged, reporters] = await Promise.all([
       get("stats:read", "/api/stats"), get("hotspots:read", "/api/hotspots"), get("reports:read", "/api/pest-reports?limit=25"),
-      get("questions:read", "/api/questions?limit=25"), get("broadcasts:read", "/api/broadcasts"), get("jobs:read", "/api/jobs"),
+      get("questions:read", `/api/questions?limit=25${$("#qMine").checked ? "&mine=1" : ""}`), get("broadcasts:read", "/api/broadcasts"), get("jobs:read", "/api/jobs"),
       get("stats:read", "/api/weather"), get("stats:read", "/api/prices"), get("prices:read", "/api/prices/flagged"), get("prices:read", "/api/reporters")
     ]);
     if (weather) renderWeather(weather);

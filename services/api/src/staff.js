@@ -115,6 +115,13 @@ function cleanStaffPhone(phone) {
   return p;
 }
 
+/** Districts an officer covers first (questions from there are routed to them). Free text, e.g. "Salala". */
+function cleanDistricts(list) {
+  if (list === undefined || list === null) return [];
+  const arr = Array.isArray(list) ? list : String(list).split(",");
+  return [...new Set(arr.map((d) => String(d).trim().slice(0, 60)).filter(Boolean))].slice(0, 30);
+}
+
 function cleanCounties(list, role) {
   const counties = [];
   for (const c of list ?? []) {
@@ -127,11 +134,11 @@ function cleanCounties(list, role) {
 }
 
 const publicStaff = (row) => row && ({
-  id: row.id, email: row.email, name: row.name, role: row.role, counties: JSON.parse(row.counties), phone: row.phone ?? null,
+  id: row.id, email: row.email, name: row.name, role: row.role, counties: JSON.parse(row.counties), districts: JSON.parse(row.districts ?? "[]"), phone: row.phone ?? null,
   two_factor: !!row.totp_enabled, active: !!row.active, last_login_at: row.last_login_at, created_at: row.created_at
 });
 
-export async function createStaff(db, { email, name, role, counties, password, phone }) {
+export async function createStaff(db, { email, name, role, counties, password, phone, districts }) {
   const errors = [];
   const mail = typeof email === "string" ? email.trim().toLowerCase() : "";
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) errors.push("email: enter a valid email address");
@@ -143,8 +150,8 @@ export async function createStaff(db, { email, name, role, counties, password, p
   const pw = password ?? generatePassword();
   if (pw.length < PASSWORD_MIN) throw new ValidationError([`password: at least ${PASSWORD_MIN} characters`]);
   if (await db.get("SELECT 1 AS x FROM staff WHERE email = ?", mail)) throw new ValidationError(["email: an account with this email already exists"]);
-  const { id } = await db.get("INSERT INTO staff (email, name, role, counties, password_hash, phone) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
-    mail, name.trim().slice(0, 80), role, JSON.stringify(list), hashPassword(pw), mobile);
+  const { id } = await db.get("INSERT INTO staff (email, name, role, counties, password_hash, phone, districts) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
+    mail, name.trim().slice(0, 80), role, JSON.stringify(list), hashPassword(pw), mobile, JSON.stringify(cleanDistricts(districts)));
   return { staff: await getStaff(db, id), password: pw };
 }
 
@@ -155,15 +162,16 @@ export async function listStaff(db) {
   return (await db.all("SELECT * FROM staff ORDER BY active DESC, role, name, id")).map(publicStaff);
 }
 
-export async function updateStaff(db, id, { name, role, counties, active, phone }) {
+export async function updateStaff(db, id, { name, role, counties, active, phone, districts }) {
   const row = await db.get("SELECT * FROM staff WHERE id = ?", id);
   if (!row) return null;
   const nextRole = role ?? row.role;
   if (!ROLES.includes(nextRole)) throw new ValidationError([`role: one of ${ROLES.join(", ")}`]);
   const list = counties !== undefined || role !== undefined ? cleanCounties(counties ?? JSON.parse(row.counties), nextRole) : JSON.parse(row.counties);
   const mobile = phone === undefined ? row.phone : cleanStaffPhone(phone);
-  await db.run("UPDATE staff SET name = ?, role = ?, counties = ?, active = ?, phone = ? WHERE id = ?",
-    typeof name === "string" && name.trim() ? name.trim().slice(0, 80) : row.name, nextRole, JSON.stringify(list), active === undefined ? row.active : active ? 1 : 0, mobile, id);
+  const dist = districts === undefined ? row.districts : JSON.stringify(cleanDistricts(districts));
+  await db.run("UPDATE staff SET name = ?, role = ?, counties = ?, active = ?, phone = ?, districts = ? WHERE id = ?",
+    typeof name === "string" && name.trim() ? name.trim().slice(0, 80) : row.name, nextRole, JSON.stringify(list), active === undefined ? row.active : active ? 1 : 0, mobile, dist, id);
   if (active === false) await db.run("DELETE FROM staff_sessions WHERE staff_id = ?", id); // log them out everywhere
   return getStaff(db, id);
 }
