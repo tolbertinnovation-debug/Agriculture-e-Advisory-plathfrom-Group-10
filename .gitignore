@@ -5,3 +5,7 @@ node_modules/
 .DS_Store
 deploy/backups/
 services/api/backups/
+
+# Vercel build output and local Vercel settings
+/public/
+.vercel

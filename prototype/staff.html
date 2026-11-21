@@ -69,7 +69,7 @@
     </div>
 
     <div class="card stack hide" id="systemCard">
-      <h3 style="display:flex;justify-content:space-between;align-items:center">System status <span><button class="act ghost" id="backupNow">Back up now</button> <button class="act ghost" id="drillNow">Run restore drill</button> <button class="act ghost" id="statusRefresh">Refresh</button></span></h3>
+      <h3 style="display:flex;justify-content:space-between;align-items:center">System status <span><button class="act ghost" id="backupNow">Back up now</button> <button class="act ghost" id="drillNow">Run restore drill</button> <button class="act ghost" id="backupDownload">Download a backup</button> <button class="act ghost" id="statusRefresh">Refresh</button></span></h3>
       <div id="system"></div>
     </div>
 
@@ -296,6 +296,20 @@ $("#drillNow").onclick = async () => {
   } catch (e) { if (!e.login) toast(e.message, true); }
 };
 $("#statusRefresh").onclick = () => renderSystem().catch((e) => toast(e.message, true));
+// A copy of the whole database to keep off the server (Google Drive, a laptop): the only backup you
+// hold yourself on hosts with no backup folder, such as Vercel.
+$("#backupDownload").onclick = async () => {
+  toast("Making a checked backup…");
+  try {
+    const res = await fetch(`${API}/api/admin/backup/download`, { headers: { Authorization: "Bearer " + StaffAuth.get() } });
+    if (!res.ok) return toast((await res.json().catch(() => ({}))).error ?? "Download failed", true);
+    const name = /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "agriconnect-backup";
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(await res.blob()), download: name });
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast(`Downloaded ${name}. Keep it somewhere safe: it holds farmers' details.`);
+    await renderAudit();
+  } catch (e) { toast(e.message, true); }
+};
 $("#backupNow").onclick = async () => {
   try {
     const r = await api("POST", "/api/admin/backup", {});

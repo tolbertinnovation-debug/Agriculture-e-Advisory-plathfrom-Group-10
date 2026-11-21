@@ -1,0 +1,9 @@
+{
+  "name": "agriconnect-liberia",
+  "private": true,
+  "description": "AgriConnect Liberia: the Vercel deployment entry (api/) and build. The app itself is in services/api.",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  }
+}

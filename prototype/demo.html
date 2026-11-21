@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgriConnect Liberia: demo</title>
+<meta name="description" content="Free farm advice for Liberian farmers on any phone: USSD, SMS and an offline app, with an extension officer dashboard.">
+<meta name="theme-color" content="#17492F">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .hero { background: linear-gradient(135deg, #123B26 0%, #1F6140 100%); color: #fff; }
+  .hero-in { max-width: 1080px; margin: 0 auto; padding: 56px 20px 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; margin-bottom: 36px; }
+  .brand .mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.14); }
+  .hero h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.1; margin: 0 0 14px; max-width: 760px; letter-spacing: -.02em; }
+  .hero p { font-size: 18px; color: #D6E7DC; margin: 0; max-width: 680px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+  .pills span { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); padding: 6px 12px; border-radius: 999px; font-size: 13.5px; font-weight: 600; }
+  main { max-width: 1080px; margin: -32px auto 0; padding: 0 20px 60px; }
+  .demos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .demo { display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: var(--ink); padding: 22px; transition: transform .12s, box-shadow .15s; }
+  .demo:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .demo h2 { margin: 6px 0 0; font-size: 18px; }
+  .demo p { margin: 0; color: var(--text-2); font-size: 14.5px; flex: 1; }
+  .demo .go { display: inline-flex; align-items: center; gap: 4px; font-weight: 650; color: var(--forest); font-size: 14px; }
+  .big-ic { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: var(--leaf-soft); color: var(--forest); }
+  .big-ic .i { width: 24px; height: 24px; }
+  .big-ic.gold { background: var(--gold-soft); color: var(--gold-ink); }
+  .big-ic.blue { background: var(--blue-soft); color: var(--blue); }
+  h3.sec { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 40px 0 12px; }
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .feature { display: flex; gap: 12px; align-items: flex-start; padding: 16px; }
+  .feature b { display: block; font-size: 14.5px; margin-bottom: 2px; }
+  .feature span { font-size: 13.5px; color: var(--text-2); }
+  .hide { display: none !important; }
+  .note { margin-top: 32px; font-size: 13.5px; color: var(--muted); }
+  .note a { font-weight: 600; }
+  @media (max-width: 860px) { .demos, .features { grid-template-columns: 1fr; } .hero-in { padding: 36px 16px 56px; } main { padding: 0 16px 48px; } }
+</style>
+</head>
+<body>
+<header class="hero"><div class="hero-in">
+  <div class="brand"><span class="mark"><svg class="i"><use href="#i-sprout"/></svg></span> AgriConnect Liberia</div>
+  <h1>Free farm advice for every Liberian farmer, on any phone.</h1>
+  <p>Crop advice, pest help, weather and market prices by USSD, SMS and an offline app, with extension officers answering farmers in their own counties.</p>
+  <div class="pills">
+    <span><svg class="i"><use href="#i-smartphone"/></svg> Works on basic phones (*347#)</span>
+    <span><svg class="i"><use href="#i-wifi-off"/></svg> App works offline</span>
+    <span><svg class="i"><use href="#i-badge-check"/></svg> Advice approved by agronomists</span>
+  </div>
+</div></header>
+
+<main>
+  <div class="demos">
+    <a class="card demo" href="index.html" id="farmerCard">
+      <span class="big-ic"><svg class="i"><use href="#i-sprout"/></svg></span>
+      <h2>Farmer app</h2>
+      <p id="farmerText">Home, crop calendar, Pest Doctor, market prices, Ask an Expert, weather and agro-dealers, as a farmer sees them.</p>
+      <span class="go">Open the farmer app <svg class="i"><use href="#i-chevron-right"/></svg></span>
+    </a>
+    <a class="card demo" href="dashboard.html">
+      <span class="big-ic gold"><svg class="i"><use href="#i-layout-dashboard"/></svg></span>
+      <h2>Officer dashboard</h2>
+      <p>Farmer questions, pest reports, hotspots, advisories to whole counties, farmers, field-test numbers, weather and prices.</p>
+      <span class="go">Open the dashboard <svg class="i"><use href="#i-chevron-right"/></svg></span>
+    </a>
+    <a class="card demo" href="ussd.html">
+      <span class="big-ic blue"><svg class="i"><use href="#i-phone"/></svg></span>
+      <h2>Basic phone: *347#</h2>
+      <p>The USSD menu that works on any phone with no internet. Type *347# and press SEND to try it.</p>
+      <span class="go">Open the USSD simulator <svg class="i"><use href="#i-chevron-right"/></svg></span>
+    </a>
+  </div>
+
+  <div class="card hide" id="logins" style="margin-top:16px">
+    <h3 style="margin:0 0 6px">Demo logins <span class="muted" style="font-weight:500">(sample data only: anyone with this page can use them)</span></h3>
+    <div class="scroll"><table>
+      <tr><th>Who</th><th>Email</th><th>Password</th><th>Can do</th></tr>
+      <tr><td>Officer</td><td>mulbah@agriconnect.test</td><td>demo-officer-2026</td><td>Questions, reports, hotspots, advisories in Bong, Lofa, Nimba</td></tr>
+      <tr><td>Admin</td><td>admin@agriconnect.test</td><td>demo-admin-2026</td><td>Everything, including staff accounts</td></tr>
+      <tr><td>Agronomist</td><td>agronomist@agriconnect.test</td><td>demo-agronomist-2026</td><td>Approves advice texts</td></tr>
+      <tr><td>Lead farmer</td><td>kerkula@agriconnect.test</td><td>demo-lead-2026</td><td>Registers farmers in Bong</td></tr>
+    </table></div>
+    <p class="muted" style="margin:8px 0 0">Farmer app: sign in with a demo phone such as <b>0770000001</b>; in demo mode the code is shown on screen. On the USSD simulator, the SMS each phone receives appear next to it.</p>
+  </div>
+
+  <h3 class="sec">What the full platform does</h3>
+  <div class="features">
+    <div class="card feature"><span class="h-ic"><svg class="i"><use href="#i-calendar-days"/></svg></span><div><b>Crop advice by SMS</b><span>For each stage of rice and cassava, timed to the month each farmer plants; held back when heavy rain is forecast.</span></div></div>
+    <div class="card feature"><span class="h-ic red"><svg class="i"><use href="#i-scan-search"/></svg></span><div><b>Pest Doctor and hotspots</b><span>Farmers report what they see; 3 reports of one pest in a county make a hotspot, and officers get an SMS.</span></div></div>
+    <div class="card feature"><span class="h-ic gold"><svg class="i"><use href="#i-messages-square"/></svg></span><div><b>Ask an Expert</b><span>Questions by SMS, *347# or the app, with a photo or a call-back request, routed to the right officer; escalated after 24 hours.</span></div></div>
+    <div class="card feature"><span class="h-ic"><svg class="i"><use href="#i-user-plus"/></svg></span><div><b>Consent first</b><span>Lead farmers and officers register farmers, who join only by replying YES, and can stop any time with STOP.</span></div></div>
+    <div class="card feature"><span class="h-ic blue"><svg class="i"><use href="#i-cloud-sun"/></svg></span><div><b>Weather and market prices</b><span>5-day forecast and farm advice per county; prices reported by trusted market reporters.</span></div></div>
+    <div class="card feature"><span class="h-ic"><svg class="i"><use href="#i-shield-check"/></svg></span><div><b>Built for a real pilot</b><span>Personal staff logins with 2-step login, officers limited to their counties, audit log, daily checked backups.</span></div></div>
+  </div>
+
+  <p class="note" id="note">This demo uses <b>sample data</b> and sends no SMS. The full platform runs on a server with a real SMS/USSD provider. RETRAP AgTech Innovation Hackathon 2026, Group 10 · <a href="https://github.com/tolbertinnovation-debug/Agriculture-e-Advisory-plathfrom-Group-10">Source code on GitHub</a></p>
+</main>
+<script src="assets/icons.js"></script>
+<script>
+// Served by a running AgriConnect (for example on Vercel): open the real farmer app, and in demo mode show the logins.
+(async () => {
+  try {
+    const h = await (await fetch("/health")).json();
+    if (!h.ok) return;
+    const card = document.getElementById("farmerCard");
+    card.href = "/app/";
+    document.getElementById("farmerText").textContent = "The real farmer app: sign in with a phone number, register, get crop advice, use Pest Doctor offline, ask an officer with a photo.";
+    if (h.demo) document.getElementById("logins").classList.remove("hide");
+    else document.getElementById("note").innerHTML = 'RETRAP AgTech Innovation Hackathon 2026, Group 10 · <a href="https://github.com/tolbertinnovation-debug/Agriculture-e-Advisory-plathfrom-Group-10">Source code on GitHub</a>';
+  } catch {}
+})();
+</script>
+</body>
+</html>
