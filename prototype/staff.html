@@ -70,8 +70,14 @@
     </div>
 
     <div class="card stack hide" id="systemCard">
-      <h3 style="display:flex;justify-content:space-between;align-items:center">System status <span><button class="act ghost" id="backupNow">Back up now</button> <button class="act ghost" id="statusRefresh">Refresh</button></span></h3>
+      <h3 style="display:flex;justify-content:space-between;align-items:center">System status <span><button class="act ghost" id="backupNow">Back up now</button> <button class="act ghost" id="drillNow">Run restore drill</button> <button class="act ghost" id="statusRefresh">Refresh</button></span></h3>
       <div id="system"></div>
+    </div>
+
+    <div class="card stack hide" id="readyCard">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">Pilot readiness <button class="act ghost" id="readyRefresh">Check again</button></h3>
+      <p class="muted" style="margin:0">Everything that must be true before real farmers use AgriConnect. ✗ items block the pilot; ! items are strong advice. On the server: <code>npm run preflight</code>.</p>
+      <div id="ready"></div>
     </div>
 
     <div class="card stack hide" id="staffAdmin">
@@ -267,10 +273,28 @@ async function renderSystem() {
       <tr><td>SMS</td><td>provider <b>${esc(s.sms.provider)}</b> · ${s.sms.waiting} waiting · ${s.sms.failed_24h} failed in 24 h</td></tr>
       <tr><td>Weather</td><td>${s.weather.last_fetch ? `updated ${esc(s.weather.last_fetch.slice(0, 16).replace("T", " "))} UTC (${s.weather.counties} counties)` : "no real forecast yet"}</td></tr>
       <tr><td>Daily advice</td><td>${s.advice ? `last run ${esc(s.advice.last_run.slice(0, 16))} UTC · ${s.advice.sent} sent` : "not run yet"}</td></tr>
+      <tr><td>Restore drill</td><td>${s.restore_drill ? `${esc(String(s.restore_drill.at).slice(0, 16))} UTC · ${s.restore_drill.ok ? `passed (${Number(s.restore_drill.rows ?? 0).toLocaleString("en-US")} rows)` : `<b>FAILED</b> ${esc(s.restore_drill.error ?? (s.restore_drill.differences ?? []).join("; "))}`}` : "never run"}</td></tr>
       <tr><td>Server</td><td>up ${s.uptime_minutes} min · Node ${esc(s.node)} · ${s.errors_24h} error(s) in 24 h</td></tr>
     </table>
     ${s.recent_errors.length ? `<details><summary class="muted" style="cursor:pointer">Recent errors (${s.recent_errors.length})</summary><table>${s.recent_errors.map((e) => `<tr><td>${esc(e.created_at.slice(0, 16).replace("T", " "))}</td><td>${esc(e.message)}</td><td class="muted">${esc(e.context.path ?? e.context.job ?? "")}</td></tr>`).join("")}</table></details>` : ""}`;
 }
+async function renderReady() {
+  const r = await api("GET", "/api/admin/readiness");
+  let area = "";
+  $("#ready").innerHTML = `<p style="margin:0"><span class="status ${r.ready ? "on" : "off"}">${r.ready ? "READY FOR THE PILOT" : `NOT READY: ${r.blocking} blocking`}</span>${r.warnings ? ` <span class="muted">· ${r.warnings} piece(s) of advice</span>` : ""}</p>
+    <table>${r.checks.map((c) => `${c.area !== area ? `<tr><th colspan="3" style="padding-top:10px">${esc((area = c.area))}</th></tr>` : ""}<tr>
+      <td style="width:28px;font-weight:800;color:${c.ok ? "var(--forest)" : c.blocking ? "var(--red)" : "#7A5A0B"}">${c.ok ? "✓" : c.blocking ? "✗" : "!"}</td>
+      <td>${esc(c.name)}</td><td class="muted">${esc(c.detail)}</td></tr>`).join("")}</table>`;
+}
+$("#readyRefresh").onclick = () => renderReady().catch((e) => toast(e.message, true));
+$("#drillNow").onclick = async () => {
+  toast("Restoring the newest backup into a separate database…");
+  try {
+    const r = await api("POST", "/api/admin/restore-drill", {});
+    toast(r.ok ? `Restore drill passed: ${r.rows} rows in ${r.tables} tables match.` : `Restore drill FAILED: ${r.error ?? r.differences.join("; ")}`, !r.ok);
+    await renderSystem(); await renderReady(); await renderAudit();
+  } catch (e) { if (!e.login) toast(e.message, true); }
+};
 $("#statusRefresh").onclick = () => renderSystem().catch((e) => toast(e.message, true));
 $("#backupNow").onclick = async () => {
   try {
@@ -289,6 +313,8 @@ async function start() {
   $("#staffAdmin").classList.toggle("hide", !admin);
   $("#systemCard").classList.toggle("hide", !me.permissions.includes("audit:read"));
   if (me.permissions.includes("audit:read") && me.mfa_ok !== false) await renderSystem().catch(() => {});
+  $("#readyCard").classList.toggle("hide", !me.permissions.includes("audit:read"));
+  if (me.permissions.includes("audit:read") && me.mfa_ok !== false) await renderReady().catch(() => {});
   $("#auditCard").classList.toggle("hide", !me.permissions.includes("audit:read"));
   if (admin && me.mfa_ok !== false) { await renderStaff(); await renderAudit(); }
   if (location.hash === "#security") $("#security").scrollIntoView();

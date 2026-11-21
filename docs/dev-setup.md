@@ -243,6 +243,8 @@ Routes marked 🔒 need a staff login (`Authorization: Bearer <token>` from `POS
 | GET 🔒 | `/api/questions?status=open&mine=1` | Questions (overdue first); `open` includes overdue ones; `mine=1` = assigned to me |
 | GET 🔒 | `/api/questions/:id/photo` | The photo sent with a question (officers: their counties) |
 | PATCH 🔒 | `/api/questions/:id/assign` | `{staff_id: "me"}` to take a question; admins can pass any officer's id (or `null`) |
+| GET 🔒 | `/api/admin/readiness` | Admin: the pilot readiness list (same as `npm run preflight`) |
+| POST 🔒 | `/api/admin/restore-drill` | Admin: restore the newest backup into a separate database and compare every table |
 | GET 🔒 | `/api/content/texts` | Every advice text with its live version, draft and review progress (editors, agronomists) |
 | POST 🔒 | `/api/content/texts` | `{item, lang, text}`: save a draft (e.g. item `stage:rice:planting`, `pest:fall-armyworm`) |
 | POST 🔒 | `/api/content/texts/:id/decide` | Agronomist: `{approve: true}` or `{approve: false, note}` |

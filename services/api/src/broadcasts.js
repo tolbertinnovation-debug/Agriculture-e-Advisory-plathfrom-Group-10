@@ -3,7 +3,6 @@
 // and growing any of the chosen crops (none = all crops).
 import { ValidationError } from "./farmers.js";
 import { findCounty } from "./geo.js";
-import { sendSms } from "./messaging.js";
 import { SMS_LIMIT } from "./content.js";
 
 // sms: an SMS to every matching farmer. app: shown on the farmer app's home screen only (no SMS cost).
@@ -69,9 +68,16 @@ export async function sendBroadcast(db, content, input) {
     // SMS are queued here; the background sender delivers them (see messaging.js).
     let queued = 0;
     if (b.channels.includes("sms")) {
-      for (const r of recipients) {
-        const sent = await sendSms(t, { phone: r.phone, farmerId: r.id, body: b.message, kind: "broadcast", broadcastId: id });
-        if (!sent.skipped) queued++;
+      // Written 500 at a time: a 10,000-farmer advisory is queued in about a second.
+      // (findRecipients already left out farmers who said STOP, in this same transaction.)
+      for (let i = 0; i < recipients.length; i += 500) {
+        const chunk = recipients.slice(i, i + 500);
+        await t.run(
+          `INSERT INTO message_log (farmer_id, phone, channel, direction, body, status, kind, broadcast_id)
+           VALUES ${chunk.map(() => "(?, ?, 'sms', 'out', ?, 'queued', 'broadcast', ?)").join(", ")}`,
+          ...chunk.flatMap((r) => [r.id, r.phone, b.message, id])
+        );
+        queued += chunk.length;
       }
     }
     return { ...(await getBroadcast(t, id)), recipients: recipients.length, queued };

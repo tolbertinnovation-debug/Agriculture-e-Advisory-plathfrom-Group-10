@@ -9,6 +9,8 @@
 import { SMS_LIMIT } from "./content.js";
 
 export const MAX_ATTEMPTS = 3;
+/** How many SMS are handed to the provider at the same time (SMS_CONCURRENCY). Ask your provider for its limit. */
+export const SMS_CONCURRENCY = Math.max(1, Math.min(50, Number(process.env.SMS_CONCURRENCY ?? 10) || 10));
 export const KINDS = ["reply", "welcome", "advice", "broadcast", "alert", "weather", "feedback"];
 
 export class MessageTooLongError extends Error {}
@@ -36,7 +38,7 @@ export async function sendSms(db, { phone, farmerId = null, body, force = false,
  * several servers: each message is claimed (queued → sending) before it is sent.
  * Returns { sent, retrying, failed }.
  */
-export async function deliverQueued(db, provider, { limit = 50, now = new Date() } = {}) {
+export async function deliverQueued(db, provider, { limit = 50, now = new Date(), concurrency = SMS_CONCURRENCY } = {}) {
   const nowIso = now.toISOString();
   const due = await db.all(
     `SELECT * FROM message_log
@@ -46,9 +48,14 @@ export async function deliverQueued(db, provider, { limit = 50, now = new Date()
     nowIso, limit
   );
   const summary = { sent: 0, retrying: 0, failed: 0 };
-  for (const m of due) {
+  // A few workers share the batch, so a slow provider doesn't make 10,000 SMS take hours.
+  let next = 0;
+  const worker = async () => {
+    while (next < due.length) await sendOne(due[next++]);
+  };
+  const sendOne = async (m) => {
     const claimed = await db.run("UPDATE message_log SET status = 'sending' WHERE id = ? AND status = 'queued'", m.id);
-    if (!claimed.changes) continue;
+    if (!claimed.changes) return;
     let result;
     try {
       result = await provider.send({ to: m.phone, body: m.body });
@@ -69,7 +76,8 @@ export async function deliverQueued(db, provider, { limit = 50, now = new Date()
       await db.run("UPDATE message_log SET status = 'failed', attempts = ?, last_error = ? WHERE id = ?", attempts, String(result.error).slice(0, 300), m.id);
       summary.failed++;
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, due.length) }, worker));
   return summary;
 }
 

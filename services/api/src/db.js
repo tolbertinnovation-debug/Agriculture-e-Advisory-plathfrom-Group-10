@@ -400,6 +400,18 @@ CREATE TABLE IF NOT EXISTS content_texts (
 CREATE INDEX IF NOT EXISTS idx_content_texts ON content_texts(item, lang, status);
 `, t.dialect));
     }
+  },
+  {
+    version: 7,
+    name: "indexes found by the load test",
+    async up(t) {
+      await t.exec(`
+CREATE INDEX IF NOT EXISTS idx_message_farmer ON message_log(farmer_id, direction, status);
+CREATE INDEX IF NOT EXISTS idx_reports_farmer ON pest_reports(farmer_id);
+CREATE INDEX IF NOT EXISTS idx_reports_phone ON pest_reports(phone);
+CREATE INDEX IF NOT EXISTS idx_questions_phone ON questions(phone);
+`);
+    }
   }
 ];
 

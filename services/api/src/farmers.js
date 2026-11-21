@@ -212,16 +212,26 @@ export function csvCell(v) {
 
 export async function exportFarmersCsv(db, filter = {}, { max = 20000 } = {}) {
   const { sql, args } = farmerFilter(filter);
+  // Count everything once per phone, then join: fast on both databases (no query per farmer).
+  // Messages, reports and questions are all stored with the farmer's phone number.
   const rows = await db.all(
     `SELECT f.*,
-       (SELECT COUNT(*) FROM message_log m WHERE m.farmer_id = f.id AND m.direction = 'out') AS sms_out,
-       (SELECT COUNT(*) FROM message_log m WHERE m.farmer_id = f.id AND m.direction = 'out' AND m.status = 'delivered') AS sms_delivered,
-       (SELECT COUNT(*) FROM message_log m WHERE m.farmer_id = f.id AND m.direction = 'out' AND m.status = 'failed') AS sms_failed,
-       (SELECT COUNT(*) FROM message_log m WHERE m.phone = f.phone AND m.direction = 'in') AS messages_in,
-       (SELECT COUNT(*) FROM pest_reports p WHERE p.farmer_id = f.id OR p.phone = f.phone) AS pest_reports,
-       (SELECT COUNT(*) FROM questions q WHERE q.farmer_id = f.id OR q.phone = f.phone) AS questions,
-       (SELECT MAX(m.created_at) FROM message_log m WHERE m.phone = f.phone AND m.direction = 'in') AS last_contact_at
-     FROM farmers f ${sql} ORDER BY f.id LIMIT ?`,
+       COALESCE(m.sms_out, 0) AS sms_out, COALESCE(m.sms_delivered, 0) AS sms_delivered, COALESCE(m.sms_failed, 0) AS sms_failed,
+       COALESCE(m.messages_in, 0) AS messages_in, m.last_contact_at,
+       COALESCE(p.n, 0) AS pest_reports, COALESCE(q.n, 0) AS questions
+     FROM farmers f
+     LEFT JOIN (
+       SELECT phone,
+              SUM(CASE WHEN direction = 'out' THEN 1 ELSE 0 END) AS sms_out,
+              SUM(CASE WHEN direction = 'out' AND status = 'delivered' THEN 1 ELSE 0 END) AS sms_delivered,
+              SUM(CASE WHEN direction = 'out' AND status = 'failed' THEN 1 ELSE 0 END) AS sms_failed,
+              SUM(CASE WHEN direction = 'in' THEN 1 ELSE 0 END) AS messages_in,
+              MAX(CASE WHEN direction = 'in' THEN created_at END) AS last_contact_at
+         FROM message_log GROUP BY phone
+     ) m ON m.phone = f.phone
+     LEFT JOIN (SELECT phone, COUNT(*) AS n FROM pest_reports GROUP BY phone) p ON p.phone = f.phone
+     LEFT JOIN (SELECT phone, COUNT(*) AS n FROM questions GROUP BY phone) q ON q.phone = f.phone
+     ${sql} ORDER BY f.id LIMIT ?`,
     ...args, max
   );
   const crops = await db.all(`SELECT farmer_id, crop, planting_month FROM farmer_crops WHERE farmer_id IN (SELECT f.id FROM farmers f ${sql}) ORDER BY crop`, ...args);

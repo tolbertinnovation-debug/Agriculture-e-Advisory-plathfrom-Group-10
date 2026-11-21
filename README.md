@@ -23,7 +23,7 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 ```bash
 cd services/api
 npm install
-npm test        # 178 tests (also run on PostgreSQL in CI)
+npm test        # 187 tests (also run on PostgreSQL in CI)
 npm run seed    # demo farmers
 npm run dev
 ```
@@ -50,6 +50,7 @@ docker compose exec api npm run create-admin -- you@example.org "Your Name"
 3. [Team roles & tools](docs/03-team-and-tools.md)
 - [Full platform blueprint (v2)](docs/blueprint.md): principles, user journeys, MVP scope, USSD design, architecture, API, data model, privacy, risks
 - [Plan to build the platform](docs/build-plan.md): 5 phases, hackathon schedule, 6 sprints, pilot, exit criteria
+- [Officer training guide](docs/officer-guide.md) · [Field test plan](docs/field-test.md) · [Security review](docs/security-review.md) · [Load test](docs/load-test.md)
 - [Product backlog](docs/backlog.md): user stories with priority and acceptance criteria
 - [Screenshots](docs/screenshots/)
 
