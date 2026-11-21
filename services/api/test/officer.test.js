@@ -6,7 +6,7 @@ let api;
 beforeEach(async () => { api = await startTestServer(); });
 afterEach(() => api.close());
 
-const farmer = (phone, county, crops = ["rice"]) =>
+const farmer = async (phone, county, crops = ["rice"]) =>
   api.call("POST", "/api/farmers", { phone, county, consent: true, crops: crops.map((crop) => ({ crop, planting_month: 5 })) });
 const report = (phone, county, symptoms = ["holes", "caterpillar"], crop = "rice") =>
   api.call("POST", "/api/pest-reports", { phone, county, crop, symptoms, channel: "ussd" });
@@ -110,19 +110,4 @@ test("stats include hotspots and reports waiting for an officer", async () => {
   assert.equal(body.hotspots, 1);
   assert.equal(body.counties_flagged, 1);
   assert.equal(body.reports_to_check, 3);
-});
-
-test("with OFFICER_TOKEN set, officer routes need the token; farmer routes stay open", async () => {
-  const secure = await startTestServer({ officerToken: "s3cret" });
-  try {
-    assert.equal((await secure.call("GET", "/api/stats")).status, 401);
-    assert.equal((await secure.call("GET", "/api/stats", null, { Authorization: "Bearer wrong" })).status, 401);
-    assert.equal((await secure.call("GET", "/api/stats", null, { Authorization: "Bearer s3cret" })).status, 200);
-    assert.equal((await secure.call("POST", "/api/broadcasts", { message: "hi" })).status, 401);
-    assert.equal((await secure.call("GET", "/api/counties")).status, 200);
-    assert.equal((await secure.call("POST", "/api/pest-reports", { phone: "0880000001", county: "Bong", symptoms: ["rot"] })).status, 401);
-    assert.equal((await secure.call("POST", "/api/auth/request-code", { phone: "0880000001" })).status, 200);
-  } finally {
-    await secure.close();
-  }
 });

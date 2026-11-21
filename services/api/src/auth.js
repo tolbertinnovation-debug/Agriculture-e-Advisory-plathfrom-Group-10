@@ -17,58 +17,62 @@ export class AuthError extends Error {
 }
 
 /** Create a code and SMS it. Returns the code (the API only shows it in development). */
-export function requestOtp(db, phone, now) {
-  const recent = db
-    .prepare("SELECT COUNT(*) AS n FROM otp_codes WHERE phone = ? AND created_at >= ?")
-    .get(phone, new Date(now.getTime() - 15 * MIN).toISOString()).n;
+export async function requestOtp(db, phone, now) {
+  const recent = (await db.get("SELECT COUNT(*) AS n FROM otp_codes WHERE phone = ? AND created_at >= ?",
+    phone, new Date(now.getTime() - 15 * MIN).toISOString())).n;
   if (recent >= OTP_MAX_REQUESTS) throw new AuthError("Too many codes requested. Wait 15 minutes and try again.", 429);
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  db.prepare("INSERT INTO otp_codes (phone, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?)")
-    .run(phone, sha(`${phone}:${code}`), new Date(now.getTime() + OTP_TTL_MIN * MIN).toISOString(), now.toISOString());
-  const farmer = getFarmerByPhone(db, phone);
-  sendSms(db, { phone, farmerId: farmer?.id ?? null, body: `Your AgriConnect code is ${code}. It expires in ${OTP_TTL_MIN} minutes. Never share it.`, force: true, kind: "alert" });
+  await db.run("INSERT INTO otp_codes (phone, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?)",
+    phone, sha(`${phone}:${code}`), new Date(now.getTime() + OTP_TTL_MIN * MIN).toISOString(), now.toISOString());
+  const farmer = await getFarmerByPhone(db, phone);
+  await sendSms(db, { phone, farmerId: farmer?.id ?? null, body: `Your AgriConnect code is ${code}. It expires in ${OTP_TTL_MIN} minutes. Never share it.`, force: true, kind: "alert" });
   return code;
 }
 
 /** Check a code. Returns a new session token, or throws AuthError. */
-export function verifyOtp(db, phone, code, now) {
-  const row = db
-    .prepare("SELECT * FROM otp_codes WHERE phone = ? AND used_at IS NULL AND expires_at > ? ORDER BY id DESC LIMIT 1")
-    .get(phone, now.toISOString());
+export async function verifyOtp(db, phone, code, now) {
+  const row = await db.get("SELECT * FROM otp_codes WHERE phone = ? AND used_at IS NULL AND expires_at > ? ORDER BY id DESC LIMIT 1",
+    phone, now.toISOString());
   if (!row) throw new AuthError("Code expired. Ask for a new code.");
   if (row.attempts >= OTP_MAX_TRIES) throw new AuthError("Too many wrong codes. Ask for a new code.");
   const ok = typeof code === "string" && /^\d{6}$/.test(code) &&
     timingSafeEqual(Buffer.from(row.code_hash), Buffer.from(sha(`${phone}:${code}`)));
   if (!ok) {
-    db.prepare("UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?").run(row.id);
+    await db.run("UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?", row.id);
     throw new AuthError("Wrong code. Check the SMS and try again.");
   }
-  db.prepare("UPDATE otp_codes SET used_at = ? WHERE id = ?").run(now.toISOString(), row.id);
+  // Mark the code used only if nobody else used it in the meantime (two taps on "Sign in").
+  const used = await db.run("UPDATE otp_codes SET used_at = ? WHERE id = ? AND used_at IS NULL", now.toISOString(), row.id);
+  if (!used.changes) throw new AuthError("Code expired. Ask for a new code.");
   const token = randomBytes(32).toString("base64url");
-  db.prepare("INSERT INTO farmer_sessions (token_hash, phone, expires_at, created_at) VALUES (?, ?, ?, ?)")
-    .run(sha(token), phone, new Date(now.getTime() + SESSION_DAYS * 24 * 60 * MIN).toISOString(), now.toISOString());
+  await db.run("INSERT INTO farmer_sessions (token_hash, phone, expires_at, created_at) VALUES (?, ?, ?, ?)",
+    sha(token), phone, new Date(now.getTime() + SESSION_DAYS * 24 * 60 * MIN).toISOString(), now.toISOString());
   return token;
 }
 
-export function sessionPhone(db, token, now) {
+export async function sessionPhone(db, token, now) {
   if (!token) return null;
-  const row = db.prepare("SELECT phone FROM farmer_sessions WHERE token_hash = ? AND expires_at > ?").get(sha(token), now.toISOString());
+  const row = await db.get("SELECT phone FROM farmer_sessions WHERE token_hash = ? AND expires_at > ?", sha(token), now.toISOString());
   return row?.phone ?? null;
 }
 
-export function endSession(db, token) {
-  if (token) db.prepare("DELETE FROM farmer_sessions WHERE token_hash = ?").run(sha(token));
+export async function endSession(db, token) {
+  if (token) await db.run("DELETE FROM farmer_sessions WHERE token_hash = ?", sha(token));
 }
 
 /** Express middleware: requires "Authorization: Bearer <session token>"; sets req.phone and req.farmer (null if not registered yet). */
 export function farmerAuth(ctx) {
-  return (req, res, next) => {
-    const token = (req.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-    const phone = sessionPhone(ctx.db, token, ctx.now());
-    if (!phone) return res.status(401).json({ error: "Please sign in again" });
-    req.token = token;
-    req.phone = phone;
-    req.farmer = getFarmerByPhone(ctx.db, phone);
-    next();
+  return async (req, res, next) => {
+    try {
+      const token = (req.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+      const phone = await sessionPhone(ctx.db, token, ctx.now());
+      if (!phone) return res.status(401).json({ error: "Please sign in again" });
+      req.token = token;
+      req.phone = phone;
+      req.farmer = await getFarmerByPhone(ctx.db, phone);
+      next();
+    } catch (err) {
+      next(err);
+    }
   };
 }

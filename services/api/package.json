@@ -4,14 +4,21 @@
   "private": true,
   "description": "AgriConnect Liberia API: farmers, advisory engine, pest reports",
   "type": "module",
-  "engines": { "node": ">=22.13" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "start": "node --no-warnings=ExperimentalWarning src/server.js",
     "dev": "node --no-warnings=ExperimentalWarning --watch src/server.js",
     "seed": "node --no-warnings=ExperimentalWarning scripts/seed.js",
+    "create-admin": "node --no-warnings=ExperimentalWarning scripts/create-admin.js",
+    "backup": "node --no-warnings=ExperimentalWarning scripts/backup.js",
+    "restore": "node --no-warnings=ExperimentalWarning scripts/restore.js",
+    "sqlite-to-postgres": "node --no-warnings=ExperimentalWarning scripts/sqlite-to-postgres.js",
     "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pg": "^8.23.1"
   }
 }

@@ -21,6 +21,7 @@ import { sendSms } from "./messaging.js";
 import { sendAdviceToFarmer } from "./scheduler.js";
 import { getForecast, shortForecast } from "./weather.js";
 import { latestPrices, priceText } from "./prices.js";
+import { isUniqueViolation } from "./db.js";
 
 export const USSD_MAX = 182;
 
@@ -86,7 +87,7 @@ function askCounty(s) {
 
 // ---------------------------------------------------------------- flows
 
-function register(ctx, s, phone) {
+async function register(ctx, s, phone) {
   const { db, content } = ctx;
   const language = s.choose("Choose language:", LANGUAGE_OPTIONS);
   const county = askCounty(s);
@@ -110,8 +111,15 @@ function register(ctx, s, phone) {
   ]);
   if (agree !== "yes") return end("Registration cancelled. Dial *347# anytime to join.");
 
-  const farmer = createFarmer(db, { phone, name: null, county, district: null, language, channel: "ussd", registered_by: null, crops });
-  sendSms(db, {
+  let farmer;
+  try {
+    farmer = await createFarmer(db, { phone, name: null, county, district: null, language, channel: "ussd", registered_by: null, crops });
+  } catch (err) {
+    // The same phone registered a moment ago (e.g. the gateway sent the last answer twice).
+    if (isUniqueViolation(err)) return end("You are already registered. Dial *347# for the full menu.");
+    throw err;
+  }
+  await sendSms(db, {
     phone,
     farmerId: farmer.id,
     body: `Welcome to AgriConnect! You are registered in ${county} County. Farm advice is free. Reply STOP to stop. Dial *347# for help.`,
@@ -119,11 +127,11 @@ function register(ctx, s, phone) {
   });
   // Send this week's advice straight away so the farmer sees value on day one.
   // (Recorded like the daily job's advice, so the farmer does not get it twice.)
-  sendAdviceToFarmer(ctx, farmer);
+  await sendAdviceToFarmer(ctx, farmer);
   return end("Thank you! You are registered.\nCheck your SMS for your first farm advice.");
 }
 
-function cropAdvice(ctx, s, farmer) {
+async function cropAdvice(ctx, s, farmer) {
   const { db, content, now } = ctx;
   const advice = adviceForFarmer(farmer, content, now());
   const pick =
@@ -135,32 +143,32 @@ function cropAdvice(ctx, s, farmer) {
     return end(`No ${name} advice this week (between seasons). We will SMS you when your season starts.`);
   }
   s.ask(`${pick.message}\n1 Get by SMS`, (v) => (v === "1" ? true : undefined));
-  sendSms(db, { phone: farmer.phone, farmerId: farmer.id, body: pick.message, force: true });
+  await sendSms(db, { phone: farmer.phone, farmerId: farmer.id, body: pick.message, force: true });
   return end("Sent! Check your SMS.");
 }
 
-function reportPest(ctx, s, phone, farmer) {
+async function reportPest(ctx, s, phone, farmer) {
   const { db, content } = ctx;
   const symptoms = s.choose("What do you see?", content.ussdSymptoms.map((o) => ({ label: o.label, value: o.symptoms })));
   const crop = s.choose("Which crop?", content.reportCrops.map((c) => ({ label: c.label, value: c.id })));
   const county = farmer ? farmer.county : askCounty(s);
-  const result = createPestReport(db, content, { phone, county, crop, symptoms, channel: "ussd" });
-  sendSms(db, { phone, farmerId: farmer?.id ?? null, body: result.reply_sms, force: true });
+  const result = await createPestReport(db, content, { phone, county, crop, symptoms, channel: "ussd" });
+  await sendSms(db, { phone, farmerId: farmer?.id ?? null, body: result.reply_sms, force: true });
   return end(`Report sent. Ref ${result.ref}.\nAdvice is coming by SMS. An extension officer will follow up.`);
 }
 
-function askExpert(ctx, s, phone, farmer) {
+async function askExpert(ctx, s, phone, farmer) {
   const how = s.choose("Ask an expert (free):", [
     { label: "Request a call-back", value: "callback" },
     { label: "Ask by SMS", value: "sms" }
   ]);
   if (how === "sms") return end("Send an SMS that starts with ASK, for example:\nASK my pepper leaves are turning yellow\nIt is free.");
   const county = farmer ? farmer.county : askCounty(s);
-  const q = createQuestion(ctx.db, { farmer, phone, county, kind: "callback", channel: "ussd" });
+  const q = await createQuestion(ctx.db, { farmer, phone, county, kind: "callback", channel: "ussd" });
   return end(`Request received (Ref Q-${q.id}).\nAn extension officer in ${county} will call you within 24 hours.`);
 }
 
-function profile(ctx, s, farmer) {
+async function profile(ctx, s, farmer) {
   const { db, content } = ctx;
   const crops = farmer.crops.map((c) => content.crops.get(c.crop)?.name ?? c.crop).join(", ");
   const smsOn = !farmer.opted_out_at;
@@ -173,15 +181,15 @@ function profile(ctx, s, farmer) {
   );
   if (action === "language") {
     const language = s.choose("Choose language:", LANGUAGE_OPTIONS);
-    setLanguage(db, farmer.id, language);
+    await setLanguage(db, farmer.id, language);
     return end(`Language changed to ${LANGUAGE_NAMES[language]}.`);
   }
-  setOptedOut(db, farmer.id, smsOn);
+  await setOptedOut(db, farmer.id, smsOn);
   return end(smsOn ? "SMS advice stopped. Dial *347# and choose 6 to start again." : "SMS advice is ON again. Welcome back!");
 }
 
-function weather(ctx, s, farmer) {
-  const f = getForecast(ctx.db, farmer.county, ctx.now());
+async function weather(ctx, s, farmer) {
+  const f = await getForecast(ctx.db, farmer.county, ctx.now());
   if (!f) return end(`No forecast for ${farmer.county} yet. Please try again later.`);
   const footer = "\n1 Get by SMS";
   let screen = "";
@@ -190,40 +198,40 @@ function weather(ctx, s, farmer) {
     if (screen.length + footer.length <= USSD_MAX) break;
   }
   s.ask((screen + footer).slice(0, USSD_MAX), (v) => (v === "1" ? true : undefined));
-  sendSms(ctx.db, { phone: farmer.phone, farmerId: farmer.id, body: `${farmer.county}: ${f.advice.text}`.slice(0, 160), force: true });
+  await sendSms(ctx.db, { phone: farmer.phone, farmerId: farmer.id, body: `${farmer.county}: ${f.advice.text}`.slice(0, 160), force: true });
   return end("Sent! Check your SMS.");
 }
 
-function prices(ctx, s, farmer) {
+async function prices(ctx, s, farmer) {
   const markets = ctx.content.markets;
   const mine = markets.findIndex((m) => m.county === farmer.county);
   const ordered = mine > 0 ? [markets[mine], ...markets.filter((_, i) => i !== mine)] : markets;
   const market = s.choose("Which market?", ordered.map((m) => ({ label: m.name, value: m.id })));
-  const list = latestPrices(ctx, market);
+  const list = await latestPrices(ctx, market);
   if (!list.items.length) return end(`${list.market_name}: no prices this week yet. Try another market.`);
   s.ask(`${priceText(list, USSD_MAX - 13)}\n1 Get by SMS`, (v) => (v === "1" ? true : undefined));
-  sendSms(ctx.db, { phone: farmer.phone, farmerId: farmer.id, body: priceText(list, 160), force: true });
+  await sendSms(ctx.db, { phone: farmer.phone, farmerId: farmer.id, body: priceText(list, 160), force: true });
   return end("Sent! Check your SMS.");
 }
 
 // ---------------------------------------------------------------- entry point
 
 /** Handle one USSD request. Returns { type: "CON" | "END", text }. */
-export function handleUssd(ctx, { phoneNumber, text }) {
+export async function handleUssd(ctx, { phoneNumber, text }) {
   const phone = normalizePhone(phoneNumber);
   if (!phone) return end("Sorry, AgriConnect is for Liberian mobile numbers.");
   const s = session(normalizeInputs(text));
   try {
-    const farmer = getFarmerByPhone(ctx.db, phone);
+    const farmer = await getFarmerByPhone(ctx.db, phone);
     if (!farmer) {
       const choice = s.choose("Welcome to AgriConnect Liberia. Free farm advice.", [
         { label: "Register (free)", value: "register" },
         { label: "Report pest or disease", value: "pest" },
         { label: "Ask an expert", value: "ask" }
       ]);
-      if (choice === "register") return register(ctx, s, phone);
-      if (choice === "pest") return reportPest(ctx, s, phone, null);
-      return askExpert(ctx, s, phone, null);
+      if (choice === "register") return await register(ctx, s, phone);
+      if (choice === "pest") return await reportPest(ctx, s, phone, null);
+      return await askExpert(ctx, s, phone, null);
     }
     const choice = s.choose(`AgriConnect - ${farmer.county}`, [
       { label: "Crop advice", value: "advice" },
@@ -234,12 +242,12 @@ export function handleUssd(ctx, { phoneNumber, text }) {
       { label: "My profile", value: "profile" }
     ]);
     switch (choice) {
-      case "advice": return cropAdvice(ctx, s, farmer);
-      case "weather": return weather(ctx, s, farmer);
-      case "prices": return prices(ctx, s, farmer);
-      case "pest": return reportPest(ctx, s, phone, farmer);
-      case "ask": return askExpert(ctx, s, phone, farmer);
-      default: return profile(ctx, s, farmer);
+      case "advice": return await cropAdvice(ctx, s, farmer);
+      case "weather": return await weather(ctx, s, farmer);
+      case "prices": return await prices(ctx, s, farmer);
+      case "pest": return await reportPest(ctx, s, phone, farmer);
+      case "ask": return await askExpert(ctx, s, phone, farmer);
+      default: return await profile(ctx, s, farmer);
     }
   } catch (err) {
     if (err instanceof NeedInput) return err.reply;

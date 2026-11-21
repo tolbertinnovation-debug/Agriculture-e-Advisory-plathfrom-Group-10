@@ -23,7 +23,7 @@ Useful links: `index.html?screen=market` opens a given screen (`home`, `guide`, 
 ```bash
 cd services/api
 npm install
-npm test        # 99 tests
+npm test        # 134 tests (also run on PostgreSQL in CI)
 npm run seed    # demo farmers
 npm run dev
 ```
@@ -31,10 +31,18 @@ npm run dev
 |---|---|
 | http://localhost:3000/app/ | **Farmer app**: sign in with an SMS code, advice, weather, prices, Pest Doctor; works offline |
 | http://localhost:3000/prototype/ussd.html | Basic phone `*347#` simulator with SMS inbox |
-| http://localhost:3000/prototype/dashboard.html | Extension officer dashboard |
+| http://localhost:3000/prototype/dashboard.html | Extension officer dashboard (log in: see the demo staff accounts printed by `npm run seed`) |
 
 The USSD simulator and the officer dashboard (`/prototype/dashboard.html`) go **LIVE** when the API is running: register farmers on `*347#`, report pests, watch the hotspot appear on the dashboard, then warn farmers and see the SMS arrive.
 Full guide: [docs/dev-setup.md](docs/dev-setup.md). Needs Node.js 22.13 or newer; no database to install.
+
+## Put it on a server
+Docker + PostgreSQL + automatic HTTPS + daily checked backups: see **[docs/deploy.md](docs/deploy.md)**.
+```bash
+cd deploy && cp .env.example .env   # set DOMAIN, POSTGRES_PASSWORD etc.
+docker compose up -d --build
+docker compose exec api npm run create-admin -- you@example.org "Your Name"
+```
 
 ## Pre-work documents
 1. [Frame the problem](docs/01-problem-framing.md)

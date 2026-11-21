@@ -1,0 +1,68 @@
+# AgriConnect on one server: the app + Caddy (automatic HTTPS with free Let's Encrypt certificates).
+# Usage (in this folder):  cp .env.example .env  → edit .env  →  docker compose up -d --build
+# Full guide: docs/deploy.md
+services:
+  # PostgreSQL 16: the database. Only reachable inside this Docker network (no port opened).
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agriconnect
+      POSTGRES_USER: agriconnect
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env - make one with openssl rand -hex 24}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agriconnect -d agriconnect"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: agriconnect:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://agriconnect:${POSTGRES_PASSWORD}@db:5432/agriconnect
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - agriconnect-data:/data      # only used if you run without PostgreSQL (SQLite)
+      - ./backups:/backups          # daily checked backups, on the host so they are easy to copy off-site
+    expose:
+      - "3000"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env, e.g. agriconnect.example.org}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data            # certificates
+      - caddy-config:/config
+    depends_on:
+      - api
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  postgres-data:
+  agriconnect-data:
+  caddy-data:
+  caddy-config:

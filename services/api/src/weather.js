@@ -57,8 +57,10 @@ export async function refreshWeather(db, { fetch, url, now = new Date() } = {}) 
   for (const county of Object.keys(COUNTY_POINTS)) {
     try {
       const days = await fetchCountyForecast(county, { fetch, url });
-      db.prepare("INSERT INTO weather_forecasts (county, days, fetched_at) VALUES (?, ?, ?) ON CONFLICT(county) DO UPDATE SET days = excluded.days, fetched_at = excluded.fetched_at")
-        .run(county, JSON.stringify(days), now.toISOString());
+      await db.run(
+        "INSERT INTO weather_forecasts (county, days, fetched_at) VALUES (?, ?, ?) ON CONFLICT(county) DO UPDATE SET days = excluded.days, fetched_at = excluded.fetched_at",
+        county, JSON.stringify(days), now.toISOString()
+      );
       result.updated++;
     } catch (err) {
       result.failed.push(`${county}: ${err.message}`);
@@ -68,8 +70,8 @@ export async function refreshWeather(db, { fetch, url, now = new Date() } = {}) 
 }
 
 /** The stored forecast for a county, from today on. Null if we have none. */
-export function getForecast(db, county, now = new Date()) {
-  const row = db.prepare("SELECT * FROM weather_forecasts WHERE county = ?").get(county);
+export async function getForecast(db, county, now = new Date()) {
+  const row = await db.get("SELECT * FROM weather_forecasts WHERE county = ?", county);
   if (!row) return null;
   const today = now.toISOString().slice(0, 10);
   const days = JSON.parse(row.days).filter((d) => d.date >= today);
@@ -115,22 +117,22 @@ export function shortForecast(days, n = 3) {
  * Rain alerts: for each county with heavy rain in the next 2 days, SMS every farmer there
  * (not STOP) — at most once every ALERT_EVERY_DAYS days per county.
  */
-export function sendWeatherAlerts(ctx) {
+export async function sendWeatherAlerts(ctx) {
   const { db } = ctx;
   const now = ctx.now();
   const sent = [];
   for (const county of Object.keys(COUNTY_POINTS)) {
-    const f = getForecast(db, county, now);
+    const f = await getForecast(db, county, now);
     if (!f?.advice.heavy_rain_soon) continue;
-    const recent = db.prepare("SELECT 1 FROM weather_alerts WHERE county = ? AND sent_at >= ?")
-      .get(county, new Date(now.getTime() - ALERT_EVERY_DAYS * 24 * 3600 * 1000).toISOString());
+    const recent = await db.get("SELECT 1 AS x FROM weather_alerts WHERE county = ? AND sent_at >= ?",
+      county, new Date(now.getTime() - ALERT_EVERY_DAYS * 24 * 3600 * 1000).toISOString());
     if (recent) continue;
     const message = `WEATHER ${county}: ${f.advice.text}`.slice(0, 160);
     let reach = 0;
-    for (const farmer of db.prepare("SELECT id, phone FROM farmers WHERE county = ? AND opted_out_at IS NULL").all(county)) {
-      if (!sendSms(db, { phone: farmer.phone, farmerId: farmer.id, body: message, kind: "weather" }).skipped) reach++;
+    for (const farmer of await db.all("SELECT id, phone FROM farmers WHERE county = ? AND opted_out_at IS NULL ORDER BY id", county)) {
+      if (!(await sendSms(db, { phone: farmer.phone, farmerId: farmer.id, body: message, kind: "weather" })).skipped) reach++;
     }
-    db.prepare("INSERT INTO weather_alerts (county, message, reach, sent_at) VALUES (?, ?, ?, ?)").run(county, message, reach, now.toISOString());
+    await db.run("INSERT INTO weather_alerts (county, message, reach, sent_at) VALUES (?, ?, ?, ?)", county, message, reach, now.toISOString());
     sent.push({ county, reach, message });
   }
   return sent;

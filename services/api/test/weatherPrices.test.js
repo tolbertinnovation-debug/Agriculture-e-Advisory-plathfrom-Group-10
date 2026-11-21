@@ -1,6 +1,5 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { openDb } from "../src/db.js";
 import { cleanFarmerInput, createFarmer, setOptedOut } from "../src/farmers.js";
 import { parseOpenMeteo, weatherAdvice, refreshWeather, getForecast, sendWeatherAlerts, fetchCountyForecast, COUNTY_POINTS } from "../src/weather.js";
 import { recordPrice, latestPrices, addReporter, priceText } from "../src/prices.js";
@@ -8,13 +7,13 @@ import { handleUssd, USSD_MAX } from "../src/ussd.js";
 import { handleInboundSms } from "../src/smsInbound.js";
 import { listMessages } from "../src/messaging.js";
 import { validateContent } from "../src/content.js";
-import { content, startTestServer } from "./helpers.js";
+import { content, startTestServer, newDb } from "./helpers.js";
 
 let clock, ctx;
 const DAY = 24 * 3600 * 1000;
-beforeEach(() => {
+beforeEach(async () => {
   clock = new Date("2026-06-02T08:00:00Z"); // a Tuesday
-  ctx = { db: openDb(":memory:"), content, now: () => clock };
+  ctx = { db: await newDb(), content, now: () => clock };
 });
 
 /** An Open-Meteo style answer for 5 days from 2026-06-02 with the given rain chances. */
@@ -28,16 +27,16 @@ const fakeFetch = (body, calls = []) => {
   f.calls = calls;
   return f;
 };
-const farmer = (phone, county = "Bong") =>
-  createFarmer(ctx.db, cleanFarmerInput({ phone, county, consent: true, crops: [{ crop: "rice", planting_month: 5 }] }, content));
+const farmer = async (phone, county = "Bong") =>
+  (await createFarmer(ctx.db, cleanFarmerInput({ phone, county, consent: true, crops: [{ crop: "rice", planting_month: 5 }] }, content)));
 
 // ---------------------------------------------------------------- weather
-test("content includes valid markets and price items", () => {
+test("content includes valid markets and price items", async () => {
   assert.deepEqual(validateContent(content), []);
   assert.equal(content.markets.length, 6);
 });
 
-test("Open-Meteo answers are parsed into simple days", () => {
+test("Open-Meteo answers are parsed into simple days", async () => {
   const days = parseOpenMeteo(openMeteo());
   assert.equal(days.length, 5);
   assert.deepEqual(days[0], { date: "2026-06-02", rain_prob: 80, rain_mm: 25.4, t_max: 29, t_min: 23, code: 61 });
@@ -54,7 +53,7 @@ test("the request asks Open-Meteo for the county capital, in GMT, 5 days", async
   assert.equal(url.searchParams.get("forecast_days"), "5");
 });
 
-test("weather advice: heavy rain, hot & dry, and good spraying days", () => {
+test("weather advice: heavy rain, hot & dry, and good spraying days", async () => {
   const rain = weatherAdvice(parseOpenMeteo(openMeteo()));
   assert.equal(rain.level, "rain");
   assert.match(rain.text, /^Heavy rain Tue & Wed\. Don't spray/);
@@ -73,102 +72,102 @@ test("refresh stores all 15 counties; a failing county keeps its old forecast", 
   const r = await refreshWeather(ctx.db, { fetch: flaky, now: clock });
   assert.equal(r.updated, 14);
   assert.match(r.failed[0], /^Bong: timeout/); // second county in the list
-  assert.equal(getForecast(ctx.db, "Bong", clock).days[0].rain_prob, 80, "old forecast kept");
-  assert.equal(getForecast(ctx.db, "Bomi", clock).days[0].rain_prob, 10);
+  assert.equal((await getForecast(ctx.db, "Bong", clock)).days[0].rain_prob, 80, "old forecast kept");
+  assert.equal((await getForecast(ctx.db, "Bomi", clock)).days[0].rain_prob, 10);
 });
 
 test("old days are dropped from a stored forecast", async () => {
   await refreshWeather(ctx.db, { fetch: fakeFetch(openMeteo()), now: clock });
   clock = new Date(clock.getTime() + 2 * DAY);
-  assert.equal(getForecast(ctx.db, "Bong", clock).days[0].date, "2026-06-04");
+  assert.equal((await getForecast(ctx.db, "Bong", clock)).days[0].date, "2026-06-04");
 });
 
 test("rain alerts go to the county's farmers (not STOP), at most once in 3 days", async () => {
   await refreshWeather(ctx.db, { fetch: fakeFetch(openMeteo()), now: clock });
-  farmer("0777000001", "Bong");
-  const stopped = farmer("0777000002", "Bong");
-  setOptedOut(ctx.db, stopped.id, true);
-  const sent = sendWeatherAlerts(ctx);
+  (await farmer("0777000001", "Bong"));
+  const stopped = (await farmer("0777000002", "Bong"));
+  (await setOptedOut(ctx.db, stopped.id, true));
+  const sent = (await sendWeatherAlerts(ctx));
   assert.equal(sent.length, 15);
   assert.equal(sent.find((a) => a.county === "Bong").reach, 1);
-  const [msg] = listMessages(ctx.db, { phone: "+231777000001" });
+  const [msg] = (await listMessages(ctx.db, { phone: "+231777000001" }));
   assert.equal(msg.kind, "weather");
   assert.match(msg.body, /^WEATHER Bong: Heavy rain/);
   assert.ok(msg.body.length <= 160);
-  assert.equal(sendWeatherAlerts(ctx).length, 0, "not again the same day");
+  assert.equal((await sendWeatherAlerts(ctx)).length, 0, "not again the same day");
   clock = new Date(clock.getTime() + 3 * DAY + 1000);
   await refreshWeather(ctx.db, { fetch: fakeFetch({ daily: { ...openMeteo().daily, time: ["2026-06-05", "2026-06-06", "2026-06-07", "2026-06-08", "2026-06-09"] } }), now: clock });
-  assert.equal(sendWeatherAlerts(ctx).length, 15, "allowed again after 3 days");
+  assert.equal((await sendWeatherAlerts(ctx)).length, 15, "allowed again after 3 days");
 });
 
 test("USSD weather screen fits and can be sent by SMS; SMS WEATHER replies with advice", async () => {
   await refreshWeather(ctx.db, { fetch: fakeFetch(openMeteo()), now: clock });
-  for (const county of Object.keys(COUNTY_POINTS)) farmer(`07770001${String(Object.keys(COUNTY_POINTS).indexOf(county)).padStart(2, "0")}`, county);
+  for (const county of Object.keys(COUNTY_POINTS)) (await farmer(`07770001${String(Object.keys(COUNTY_POINTS).indexOf(county)).padStart(2, "0")}`, county));
   for (let i = 0; i < 15; i++) {
-    const r = handleUssd(ctx, { phoneNumber: `07770001${String(i).padStart(2, "0")}`, text: "2" });
+    const r = (await handleUssd(ctx, { phoneNumber: `07770001${String(i).padStart(2, "0")}`, text: "2" }));
     assert.ok(r.text.length <= USSD_MAX, `${r.text.length}: ${r.text}`);
     assert.match(r.text, /Tue 29C rain 80%/);
   }
-  assert.equal(handleUssd(ctx, { phoneNumber: "0777000100", text: "2*1" }).text, "Sent! Check your SMS.");
-  const reply = handleInboundSms(ctx, { from: "0777000100", text: "weather" }).reply;
+  assert.equal((await handleUssd(ctx, { phoneNumber: "0777000100", text: "2*1" })).text, "Sent! Check your SMS.");
+  const reply = (await handleInboundSms(ctx, { from: "0777000100", text: "weather" })).reply;
   assert.match(reply, /^Bomi: Heavy rain/);
 });
 
-test("no forecast yet: a polite message", () => {
-  farmer("0777000001");
-  assert.match(handleUssd(ctx, { phoneNumber: "0777000001", text: "2" }).text, /No forecast for Bong yet/);
+test("no forecast yet: a polite message", async () => {
+  (await farmer("0777000001"));
+  assert.match((await handleUssd(ctx, { phoneNumber: "0777000001", text: "2" })).text, /No forecast for Bong yet/);
 });
 
 // ---------------------------------------------------------------- prices
-test("prices: recorded, latest shown with the weekly change", () => {
+test("prices: recorded, latest shown with the weekly change", async () => {
   clock = new Date(clock.getTime() - 10 * DAY);
-  recordPrice(ctx, { market: "GBARNGA", item: "RICE", price: 40 });
-  recordPrice(ctx, { market: "gbarnga", item: "rice", price: 40 });
+  (await recordPrice(ctx, { market: "GBARNGA", item: "RICE", price: 40 }));
+  (await recordPrice(ctx, { market: "gbarnga", item: "rice", price: 40 }));
   clock = new Date(clock.getTime() + 10 * DAY);
-  recordPrice(ctx, { market: "GBARNGA", item: "RICE", price: 45 });
-  const list = latestPrices(ctx, "GBARNGA");
+  (await recordPrice(ctx, { market: "GBARNGA", item: "RICE", price: 45 }));
+  const list = (await latestPrices(ctx, "GBARNGA"));
   assert.equal(list.market_name, "Gbarnga");
   assert.deepEqual(list.items.map((i) => [i.code, i.price_lrd, i.change_pct]), [["RICE", 45, 13]]);
 });
 
-test("a price far from recent prices is flagged and hidden until an officer approves it", () => {
-  recordPrice(ctx, { market: "GANTA", item: "PEPPER", price: 75 });
-  recordPrice(ctx, { market: "GANTA", item: "PEPPER", price: 80 });
-  const typo = recordPrice(ctx, { market: "GANTA", item: "PEPPER", price: 750 });
+test("a price far from recent prices is flagged and hidden until an officer approves it", async () => {
+  (await recordPrice(ctx, { market: "GANTA", item: "PEPPER", price: 75 }));
+  (await recordPrice(ctx, { market: "GANTA", item: "PEPPER", price: 80 }));
+  const typo = (await recordPrice(ctx, { market: "GANTA", item: "PEPPER", price: 750 }));
   assert.equal(typo.status, "flagged");
-  assert.equal(latestPrices(ctx, "GANTA").items[0].price_lrd, 80);
+  assert.equal((await latestPrices(ctx, "GANTA")).items[0].price_lrd, 80);
 });
 
-test("bad prices are refused with a clear reason", () => {
-  assert.throws(() => recordPrice(ctx, { market: "PARIS", item: "RICE", price: 45 }), /unknown market/);
-  assert.throws(() => recordPrice(ctx, { market: "GANTA", item: "GOLD", price: 45 }), /unknown item/);
-  assert.throws(() => recordPrice(ctx, { market: "GANTA", item: "RICE", price: -3 }), /price/);
+test("bad prices are refused with a clear reason", async () => {
+  await assert.rejects(async () => (await recordPrice(ctx, { market: "PARIS", item: "RICE", price: 45 })), /unknown market/);
+  await assert.rejects(async () => (await recordPrice(ctx, { market: "GANTA", item: "GOLD", price: 45 })), /unknown item/);
+  await assert.rejects(async () => (await recordPrice(ctx, { market: "GANTA", item: "RICE", price: -3 })), /price/);
 });
 
-test("SMS: reporters send PRICE; others cannot; anyone can ask PRICES", () => {
-  addReporter(ctx, { phone: "0886000001", name: "Comfort", market: "GBARNGA" });
-  assert.match(handleInboundSms(ctx, { from: "0886000001", text: "PRICE GBARNGA RICE 45" }).reply, /Saved: Local rice 45 LRD\/cup at Gbarnga/);
-  assert.match(handleInboundSms(ctx, { from: "0886000001", text: "price gbarnga pepper 75lrd" }).reply, /Hot pepper 75 LRD/);
-  assert.match(handleInboundSms(ctx, { from: "0886000001", text: "PRICE GBARNGA GOLD 9" }).reply, /^Not saved\. item: unknown item/);
-  assert.match(handleInboundSms(ctx, { from: "0777999999", text: "PRICE GBARNGA RICE 5" }).reply, /Only registered market reporters/);
-  const ask = handleInboundSms(ctx, { from: "0777999999", text: "PRICES GBARNGA" }).reply;
+test("SMS: reporters send PRICE; others cannot; anyone can ask PRICES", async () => {
+  (await addReporter(ctx, { phone: "0886000001", name: "Comfort", market: "GBARNGA" }));
+  assert.match((await handleInboundSms(ctx, { from: "0886000001", text: "PRICE GBARNGA RICE 45" })).reply, /Saved: Local rice 45 LRD\/cup at Gbarnga/);
+  assert.match((await handleInboundSms(ctx, { from: "0886000001", text: "price gbarnga pepper 75lrd" })).reply, /Hot pepper 75 LRD/);
+  assert.match((await handleInboundSms(ctx, { from: "0886000001", text: "PRICE GBARNGA GOLD 9" })).reply, /^Not saved\. item: unknown item/);
+  assert.match((await handleInboundSms(ctx, { from: "0777999999", text: "PRICE GBARNGA RICE 5" })).reply, /Only registered market reporters/);
+  const ask = (await handleInboundSms(ctx, { from: "0777999999", text: "PRICES GBARNGA" })).reply;
   assert.equal(ask, "GBARNGA (LRD):\nRICE 45/cup\nPEPPER 75/pile");
 });
 
-test("USSD prices: the farmer's own county market is listed first; screens fit", () => {
-  addReporter(ctx, { phone: "0886000001", market: "GANTA" });
-  for (const it of content.items) recordPrice(ctx, { market: "GANTA", item: it.code, price: 1234.5 });
-  farmer("0777000001", "Nimba");
-  assert.match(handleUssd(ctx, { phoneNumber: "0777000001", text: "3" }).text, /^Which market\?\n1 Ganta/);
-  const r = handleUssd(ctx, { phoneNumber: "0777000001", text: "3*1" });
+test("USSD prices: the farmer's own county market is listed first; screens fit", async () => {
+  (await addReporter(ctx, { phone: "0886000001", market: "GANTA" }));
+  for (const it of content.items) (await recordPrice(ctx, { market: "GANTA", item: it.code, price: 1234.5 }));
+  (await farmer("0777000001", "Nimba"));
+  assert.match((await handleUssd(ctx, { phoneNumber: "0777000001", text: "3" })).text, /^Which market\?\n1 Ganta/);
+  const r = (await handleUssd(ctx, { phoneNumber: "0777000001", text: "3*1" }));
   assert.ok(r.text.length <= USSD_MAX, r.text);
   assert.match(r.text, /1 Get by SMS$/);
-  assert.equal(handleUssd(ctx, { phoneNumber: "0777000001", text: "3*1*1" }).text, "Sent! Check your SMS.");
-  assert.ok(listMessages(ctx.db, { phone: "+231777000001" })[0].body.length <= 160);
-  assert.match(handleUssd(ctx, { phoneNumber: "0777000001", text: "3*2" }).text, /no prices this week yet/);
+  assert.equal((await handleUssd(ctx, { phoneNumber: "0777000001", text: "3*1*1" })).text, "Sent! Check your SMS.");
+  assert.ok((await listMessages(ctx.db, { phone: "+231777000001" }))[0].body.length <= 160);
+  assert.match((await handleUssd(ctx, { phoneNumber: "0777000001", text: "3*2" })).text, /no prices this week yet/);
 });
 
-test("priceText never goes over the limit", () => {
+test("priceText never goes over the limit", async () => {
   const list = { market_name: "Red Light (Monrovia)", items: content.items.map((i) => ({ code: i.code, unit: i.unit, price_lrd: 123456 })) };
   assert.ok(priceText(list).length <= 160);
 });
@@ -197,8 +196,8 @@ test("over HTTP: public weather & prices, officer price tools, weather refresh, 
 
 test("officer can refresh the weather now (uses the configured source)", async () => {
   const { createApp } = await import("../src/app.js");
-  const db = openDb(":memory:");
-  const app = createApp({ db, content, now: () => clock, officerToken: "", webhookSecret: "", weatherFetch: fakeFetch(openMeteo()) });
+  const db = await newDb();
+  const app = createApp({ db, content, now: () => clock, staffAuth: false, webhookSecret: "", weatherFetch: fakeFetch(openMeteo()) });
   const server = await new Promise((ok) => { const s = app.listen(0, () => ok(s)); });
   const base = `http://127.0.0.1:${server.address().port}`;
   try {

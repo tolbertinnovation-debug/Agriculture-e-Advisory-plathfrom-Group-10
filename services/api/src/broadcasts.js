@@ -5,7 +5,6 @@ import { ValidationError } from "./farmers.js";
 import { findCounty } from "./geo.js";
 import { sendSms } from "./messaging.js";
 import { SMS_LIMIT } from "./content.js";
-import { transaction } from "./db.js";
 
 export const BROADCAST_CHANNELS = ["sms", "voice", "app"]; // only sms is delivered for now
 
@@ -34,7 +33,7 @@ export function cleanBroadcastInput(input, content) {
 }
 
 /** Farmers who would receive this broadcast. */
-export function findRecipients(db, { counties, crops }) {
+export async function findRecipients(db, { counties, crops }) {
   const where = ["f.opted_out_at IS NULL"];
   const args = [];
   if (counties.length) {
@@ -45,30 +44,31 @@ export function findRecipients(db, { counties, crops }) {
     where.push(`EXISTS (SELECT 1 FROM farmer_crops fc WHERE fc.farmer_id = f.id AND fc.crop IN (${crops.map(() => "?").join(",")}))`);
     args.push(...crops);
   }
-  return db.prepare(`SELECT f.id, f.phone FROM farmers f WHERE ${where.join(" AND ")}`).all(...args);
+  return db.all(`SELECT f.id, f.phone FROM farmers f WHERE ${where.join(" AND ")} ORDER BY f.id`, ...args);
 }
 
-export function previewBroadcast(db, content, input) {
+export async function previewBroadcast(db, content, input) {
   const target = cleanBroadcastInput({ ...input, requireMessage: false }, content);
-  return { reach: findRecipients(db, target).length, counties: target.counties, crops: target.crops };
+  return { reach: (await findRecipients(db, target)).length, counties: target.counties, crops: target.crops };
 }
 
-export function sendBroadcast(db, content, input) {
+export async function sendBroadcast(db, content, input) {
   const b = cleanBroadcastInput(input, content);
-  const recipients = findRecipients(db, b);
-  return transaction(db, () => {
+  return db.tx(async (t) => {
+    const recipients = await findRecipients(t, b);
     // Messages are queued here; the background sender delivers them (see messaging.js).
     let queued = 0;
     if (b.channels.includes("sms")) {
       for (const r of recipients) {
-        const sent = sendSms(db, { phone: r.phone, farmerId: r.id, body: b.message, kind: "broadcast" });
+        const sent = await sendSms(t, { phone: r.phone, farmerId: r.id, body: b.message, kind: "broadcast" });
         if (!sent.skipped) queued++;
       }
     }
-    const { lastInsertRowid } = db
-      .prepare("INSERT INTO broadcasts (counties, crops, channels, message, sent_by, reach) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(JSON.stringify(b.counties), JSON.stringify(b.crops), JSON.stringify(b.channels), b.message, b.sent_by, queued);
-    return { ...getBroadcast(db, Number(lastInsertRowid)), recipients: recipients.length, queued };
+    const { id } = await t.get(
+      "INSERT INTO broadcasts (counties, crops, channels, message, sent_by, reach) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+      JSON.stringify(b.counties), JSON.stringify(b.crops), JSON.stringify(b.channels), b.message, b.sent_by, queued
+    );
+    return { ...(await getBroadcast(t, id)), recipients: recipients.length, queued };
   });
 }
 
@@ -78,10 +78,10 @@ function parse(row) {
     : null;
 }
 
-export function getBroadcast(db, id) {
-  return parse(db.prepare("SELECT * FROM broadcasts WHERE id = ?").get(id));
+export async function getBroadcast(db, id) {
+  return parse(await db.get("SELECT * FROM broadcasts WHERE id = ?", id));
 }
 
-export function listBroadcasts(db, { limit = 20 } = {}) {
-  return db.prepare("SELECT * FROM broadcasts ORDER BY id DESC LIMIT ?").all(limit).map(parse);
+export async function listBroadcasts(db, { limit = 20 } = {}) {
+  return (await db.all("SELECT * FROM broadcasts ORDER BY id DESC LIMIT ?", limit)).map(parse);
 }

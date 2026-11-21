@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/data
+**/backups
+**/*.db
+**/.env
+docs
+deploy
+services/api/test

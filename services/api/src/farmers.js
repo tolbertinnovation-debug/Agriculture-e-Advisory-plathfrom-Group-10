@@ -1,5 +1,5 @@
 // Farmer data access: shared by the REST API now and the USSD/SMS handlers in step 2.
-import { transaction } from "./db.js";
+import { sqlNow } from "./db.js";
 import { findCounty, normalizePhone } from "./geo.js";
 
 export class ValidationError extends Error {
@@ -50,52 +50,54 @@ export function cleanFarmerInput(input, content) {
   };
 }
 
-export function createFarmer(db, farmer) {
-  return transaction(db, () => {
-    const { lastInsertRowid } = db
-      .prepare(`INSERT INTO farmers (phone, name, county, district, language, channel, registered_by, consent_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`)
-      .run(farmer.phone, farmer.name, farmer.county, farmer.district, farmer.language, farmer.channel, farmer.registered_by);
-    const addCrop = db.prepare("INSERT INTO farmer_crops (farmer_id, crop, planting_month) VALUES (?, ?, ?)");
-    for (const c of farmer.crops) addCrop.run(lastInsertRowid, c.crop, c.planting_month);
-    return getFarmer(db, Number(lastInsertRowid));
+export async function createFarmer(db, farmer) {
+  return db.tx(async (t) => {
+    const { id } = await t.get(
+      `INSERT INTO farmers (phone, name, county, district, language, channel, registered_by, consent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      farmer.phone, farmer.name, farmer.county, farmer.district, farmer.language, farmer.channel, farmer.registered_by, sqlNow()
+    );
+    for (const c of farmer.crops) await t.run("INSERT INTO farmer_crops (farmer_id, crop, planting_month) VALUES (?, ?, ?)", id, c.crop, c.planting_month);
+    return getFarmer(t, id);
   });
 }
 
-function withCrops(db, row) {
+async function withCrops(db, row) {
   if (!row) return null;
-  const crops = db.prepare("SELECT crop, planting_month FROM farmer_crops WHERE farmer_id = ? ORDER BY crop").all(row.id);
-  return { ...row, crops: crops.map((c) => ({ ...c })) };
+  const crops = await db.all("SELECT crop, planting_month FROM farmer_crops WHERE farmer_id = ? ORDER BY crop", row.id);
+  return { ...row, crops };
 }
 
-export function getFarmer(db, id) {
-  return withCrops(db, db.prepare("SELECT * FROM farmers WHERE id = ?").get(id));
+export async function getFarmer(db, id) {
+  return withCrops(db, await db.get("SELECT * FROM farmers WHERE id = ?", id));
 }
 
-export function getFarmerByPhone(db, phone) {
+export async function getFarmerByPhone(db, phone) {
   const p = normalizePhone(phone);
-  return p ? withCrops(db, db.prepare("SELECT * FROM farmers WHERE phone = ?").get(p)) : null;
+  return p ? withCrops(db, await db.get("SELECT * FROM farmers WHERE phone = ?", p)) : null;
 }
 
-export function listFarmers(db, { county, limit = 100, offset = 0 } = {}) {
-  const rows = county
-    ? db.prepare("SELECT * FROM farmers WHERE county = ? ORDER BY id DESC LIMIT ? OFFSET ?").all(county, limit, offset)
-    : db.prepare("SELECT * FROM farmers ORDER BY id DESC LIMIT ? OFFSET ?").all(limit, offset);
-  return rows.map((r) => withCrops(db, r));
+/** counties: limit to these counties (an officer's area); undefined = all. */
+export async function listFarmers(db, { county, counties, limit = 100, offset = 0 } = {}) {
+  const list = counties ?? (county ? [county] : null);
+  const rows = list
+    ? await db.all(`SELECT * FROM farmers WHERE county IN (${list.map(() => "?").join(",") || "NULL"}) ORDER BY id DESC LIMIT ? OFFSET ?`, ...list, limit, offset)
+    : await db.all("SELECT * FROM farmers ORDER BY id DESC LIMIT ? OFFSET ?", limit, offset);
+  return Promise.all(rows.map((r) => withCrops(db, r)));
 }
 
-export function countFarmersByCounty(db) {
-  return db.prepare("SELECT county, COUNT(*) AS farmers FROM farmers WHERE opted_out_at IS NULL GROUP BY county ORDER BY farmers DESC").all().map((r) => ({ ...r }));
+export async function countFarmersByCounty(db) {
+  return db.all("SELECT county, COUNT(*) AS farmers FROM farmers WHERE opted_out_at IS NULL GROUP BY county ORDER BY farmers DESC, county");
 }
 
-export function setLanguage(db, farmerId, language) {
+export async function setLanguage(db, farmerId, language) {
   if (!LANGUAGES.includes(language)) throw new ValidationError([`language: must be one of ${LANGUAGES.join(", ")}`]);
-  db.prepare("UPDATE farmers SET language = ? WHERE id = ?").run(language, farmerId);
+  await db.run("UPDATE farmers SET language = ? WHERE id = ?", language, farmerId);
   return getFarmer(db, farmerId);
 }
 
 /** STOP / START: opted-out farmers get no push messages, but can still use USSD. */
-export function setOptedOut(db, farmerId, optedOut) {
-  db.prepare(`UPDATE farmers SET opted_out_at = ${optedOut ? "datetime('now')" : "NULL"} WHERE id = ?`).run(farmerId);
+export async function setOptedOut(db, farmerId, optedOut) {
+  await db.run("UPDATE farmers SET opted_out_at = ? WHERE id = ?", optedOut ? sqlNow() : null, farmerId);
   return getFarmer(db, farmerId);
 }

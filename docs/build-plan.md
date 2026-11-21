@@ -144,7 +144,16 @@ SMS and USSD traffic · voice minutes · hosting · phones for testing · transl
 | 5 | Farmer app (`apps/farmer`): SMS-code sign-in, registration, advice, county alerts, Pest Doctor and questions that work offline and sync without duplicates | ✅ Done |
 | 6 | Weather (Open-Meteo per county, farm advice, rain alerts) and market prices (SMS reporting, unusual-price check, weekly change) on USSD, SMS, app and dashboard | ✅ Done |
 
-**All six build steps are done: the hackathon MVP is complete.** Next (MVP Sprint 1 in Phase 2): move to PostgreSQL, real staff accounts with roles and 2FA instead of `OFFICER_TOKEN`, deploy to a server with HTTPS and daily backups, and test with real phones on Lonestar Cell MTN and Orange.
+**All six build steps are done: the hackathon MVP is complete.**
+
+### Phase 2 · Sprint 1 progress
+
+| # | Work | Status |
+|---|---|---|
+| 2.1 | Staff accounts: personal logins, roles (admin / officer / editor / viewer), officers limited to their counties, 2-step login (TOTP), lockout after 5 wrong tries, 12-hour sessions, audit log, admin tools, `create-admin` script; replaces `OFFICER_TOKEN` | ✅ Done |
+| 2.2 | Deployment: Docker image (non-root, health check), Caddy with automatic HTTPS, daily checked backups + restore script, system status page, error log + webhook alerts, security headers, per-IP login limits, clean shutdown, production safety checks, CI builds the image. Guide: [deploy.md](deploy.md) | ✅ Done |
+| 2.3 | PostgreSQL: one async database layer for SQLite and PostgreSQL, numbered migrations, PostgreSQL in Docker Compose, backups and restore for both, `sqlite-to-postgres` move script; all tests run on both databases in CI | ✅ Done |
+| 2.4 | Real-phone test with an SMS provider on Lonestar Cell MTN and Orange | Next: needs an SMS account |
 
 ## Next 7 days
 1. Turn every **Must** story in [backlog.md](backlog.md) into a GitHub issue with an owner.
