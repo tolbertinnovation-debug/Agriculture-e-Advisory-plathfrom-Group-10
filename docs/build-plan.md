@@ -196,6 +196,19 @@ The weather service (Open-Meteo per county, rain alerts) and market prices (SMS 
 | S5.2 | **Review progress for the exit criterion** "All advisories in production are approved by an agronomist": shown in the editor and on the dashboard's Field test card | ✅ Done |
 | S5.3 | **Rain override**: crop stages marked `hold_in_rain` (rice harvest and drying) wait while heavy rain is forecast for the farmer's county and go out on the first clear day | ✅ Done |
 
+### Phase 2 · Sprint 6: pilot-ready
+
+| # | Work | Status |
+|---|---|---|
+| S6.1 | **Security review** ([security-review.md](security-review.md)): 0 vulnerable dependencies; a test that all 80 routes except 16 public ones need a login; XSS probe of every page; 3 real findings fixed (sign-in codes visible in production with the test SMS setting, SQL from a tampered backup file, no limit on farmer questions/reports) and a Content-Security-Policy added | ✅ Done |
+| S6.2 | **Load test** ([load-test.md](load-test.md), `npm run load-test`): 10,000 farmers, one advisory, on SQLite and PostgreSQL. Sending 10,000 SMS went from 9 min to 1 min (parallel sending), queueing from 7.7 s to 0.3 s, the farmer CSV from 5 s to 0.03 s | ✅ Done |
+| S6.3 | **Restore drill** (`npm run restore-drill` or the *Run restore drill* button): the newest backup restored into a separate database and every table compared; shown on System status, with a warning after 30 days | ✅ Done |
+| S6.4 | **Pilot readiness check** (`npm run preflight` and the *Pilot readiness* card): settings, staff, 2-step login, officers per pilot county, approved content, backups, restore drill and field-test health in one list | ✅ Done |
+| S6.5 | **Officer training guide** ([officer-guide.md](officer-guide.md)) with practice tasks, and the **field test plan** ([field-test.md](field-test.md)): 4 weeks, 30–50 farmers, exit criteria, interview questions, fix list | ✅ Done |
+| S6.6 | Field test with 30–50 farmers, fix list closed | Next: needs the SMS provider, an agronomist's approval and trained officers |
+
+**The MVP build (Phase 2) is complete in code.** What remains needs people and partners: an SMS/USSD account, the agronomist's review, officer training, and the field test itself.
+
 **Sprint 2 is done.** The platform is ready for the 30–50 farmer field test. Still needed from outside the code: an SMS/USSD account for the real-phone test (Sprint 1, item 2.4) and an agronomist's review of the content.
 
 ## Next 7 days

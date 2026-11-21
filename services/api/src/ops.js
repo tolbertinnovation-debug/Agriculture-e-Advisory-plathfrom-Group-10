@@ -1,11 +1,12 @@
 // Operations: backups (both databases), error log + alerts, and a system status report.
 import { DatabaseSync } from "node:sqlite";
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createGzip, createGunzip } from "node:zlib";
 import { createInterface } from "node:readline";
 import { once } from "node:events";
 import { join } from "node:path";
-import { TABLES, MIGRATIONS, sqlNow, sqlDaysAgo } from "./db.js";
+import { TABLES, MIGRATIONS, sqlNow, sqlDaysAgo, openDb } from "./db.js";
 
 export const BACKUP_PREFIX = "agriconnect-";
 const SCHEMA_VERSION = Math.max(...MIGRATIONS.map((m) => m.version));
@@ -131,8 +132,15 @@ export async function importBackup(db, file) {
   return db.tx(async (t) => {
     for (const table of [...TABLES].reverse()) await t.run(`DELETE FROM ${table}`);
     const counts = {};
+    const known = new Map(); // table -> its real column names
     for await (const { table, row } of readBackup(file)) {
+      // Table and column names go into SQL, so only names that really exist are accepted:
+      // a damaged or tampered backup file can never run its own SQL.
+      if (!TABLES.includes(table)) throw new Error(`Backup has an unknown table "${String(table).slice(0, 40)}"`);
+      if (!known.has(table)) known.set(table, new Set(await columnsOf(t, table)));
       const cols = Object.keys(row);
+      const bad = cols.find((c) => !known.get(table).has(c));
+      if (bad) throw new Error(`Backup has an unknown column "${String(bad).slice(0, 40)}" in ${table}`);
       await t.run(`INSERT INTO ${table} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`, ...cols.map((c) => row[c]));
       counts[table] = (counts[table] ?? 0) + 1;
     }
@@ -145,6 +153,67 @@ export async function importBackup(db, file) {
     }
     return counts;
   });
+}
+
+/** Column names of a table, read from the database itself. */
+async function columnsOf(t, table) {
+  if (t.dialect === "postgres") {
+    return (await t.all("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?", table)).map((r) => r.name);
+  }
+  return (await t.all(`PRAGMA table_info(${table})`)).map((r) => r.name);
+}
+
+/**
+ * Restore drill (MVP exit criterion "Restore from backup tested"): take the newest backup in
+ * `backupDir` (or make a fresh one), restore it into a separate, empty database, and check that
+ * every table has exactly the rows the backup holds. The live database is never touched.
+ * The result is recorded, so the System status shows when the last drill passed.
+ */
+export async function restoreDrill(db, { backupDir, now = new Date() } = {}) {
+  const started = Date.now();
+  const scratch = mkdtempSync(join(tmpdir(), "agri-drill-"));
+  let result;
+  try {
+    let file;
+    const newest = backupDir ? listBackupFiles(backupDir)[0] : null;
+    if (newest) file = join(backupDir, newest.name);
+    else {
+      const b = await backupDatabase(db, scratch, { now, keep: 1 });
+      if (!b.ok) throw new Error(`Could not make a backup: ${b.error ?? b.integrity}`);
+      file = b.file;
+    }
+    const inBackup = {};
+    for await (const { table } of readBackup(file)) inBackup[table] = (inBackup[table] ?? 0) + 1;
+    const target = await openDb(join(scratch, "restored.db")); // a new, empty database
+    try {
+      await importBackup(target, file);
+      const differences = [];
+      let rows = 0;
+      for (const table of TABLES) {
+        const n = Number((await target.get(`SELECT COUNT(*) AS n FROM ${table}`)).n);
+        rows += n;
+        if (n !== (inBackup[table] ?? 0)) differences.push(`${table}: ${inBackup[table] ?? 0} in the backup, ${n} restored`);
+      }
+      // The restored database must also work: open a farmer and their crops.
+      const f = await target.get("SELECT id FROM farmers ORDER BY id LIMIT 1");
+      if (f && !(await target.get("SELECT 1 AS x FROM farmer_crops WHERE farmer_id = ?", f.id))) differences.push("a restored farmer has no crops");
+      result = { ok: differences.length === 0, file: file.split(/[\\/]/).pop(), tables: TABLES.length, rows, farmers: inBackup.farmers ?? 0, differences };
+    } finally {
+      await target.close();
+    }
+  } catch (err) {
+    result = { ok: false, error: err.message };
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+  result.seconds = +((Date.now() - started) / 1000).toFixed(1);
+  await db.run("INSERT INTO job_runs (job, run_date, trigger, result) VALUES ('restore_drill', ?, 'manual', ?)", now.toISOString().slice(0, 10), JSON.stringify(result));
+  return result;
+}
+
+export async function lastRestoreDrill(db) {
+  const r = await db.get("SELECT started_at, result FROM job_runs WHERE job = 'restore_drill' ORDER BY id DESC LIMIT 1");
+  return r ? { at: r.started_at, ...JSON.parse(r.result) } : null;
 }
 
 export function listBackupFiles(dir) {
@@ -211,6 +280,7 @@ export async function systemStatus(db, { now = new Date(), backupDir, smsProvide
       MIN(CASE WHEN status IN ('queued','sending') THEN created_at END) AS oldest_waiting
     FROM message_log WHERE direction = 'out'`, sqlDaysAgo(1, now));
   const errors24h = (await db.get("SELECT COUNT(*) AS n FROM error_log WHERE created_at >= ?", new Date(now.getTime() - 86400000).toISOString())).n;
+  const drill = await lastRestoreDrill(db);
 
   const warnings = [];
   if (!backupDir) warnings.push("Backups are off (set BACKUP_DIR).");
@@ -222,6 +292,9 @@ export async function systemStatus(db, { now = new Date(), backupDir, smsProvide
   if (sms.oldest_waiting && sqlNow(now) > sqlNow(new Date(Date.parse(sms.oldest_waiting.replace(" ", "T") + "Z") + 15 * 60000))) warnings.push("SMS have been waiting more than 15 minutes: check the SMS provider.");
   if (errors24h) warnings.push(`${errors24h} server error(s) in the last 24 hours.`);
   if (!weather.t) warnings.push("No real weather forecast yet (only sample data or none).");
+  if (!drill) warnings.push("No restore drill yet: run npm run restore-drill to prove a restore works.");
+  else if (!drill.ok) warnings.push("The last restore drill FAILED.");
+  else if (sqlNow(now) > sqlNow(new Date(Date.parse(drill.at.replace(" ", "T") + "Z") + 30 * 86400000))) warnings.push("The last restore drill is more than 30 days old.");
 
   return {
     ok: warnings.length === 0,
@@ -234,6 +307,7 @@ export async function systemStatus(db, { now = new Date(), backupDir, smsProvide
     sms: { provider: smsProvider, waiting: sms.waiting ?? 0, failed_24h: sms.failed_24h ?? 0 },
     weather: { last_fetch: weather.t, counties: weather.n },
     advice: advice ? { last_run: advice.started_at, ...JSON.parse(advice.result || "{}") } : null,
-    errors_24h: errors24h
+    errors_24h: errors24h,
+    restore_drill: drill
   };
 }

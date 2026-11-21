@@ -22,7 +22,8 @@ import { staffGuards, staffRoutes, scopeCounties, mustCover } from "./staffAuth.
 import { audit, can, isAreaLimited, AccessError } from "./staff.js";
 import { createRegistration, listRegistrations, getRegistration, resendRegistration, cancelRegistration, mayManage } from "./registrations.js";
 import { securityHeaders, cors, rateLimit } from "./http.js";
-import { recordError, systemStatus, recentErrors, backupDatabase, listBackupFiles } from "./ops.js";
+import { pilotReadiness } from "./preflight.js";
+import { recordError, systemStatus, recentErrors, backupDatabase, listBackupFiles, restoreDrill } from "./ops.js";
 import { signupFunnel, feedbackSummary, runFeedbackJob } from "./fieldTest.js";
 import { listContent, draftText, decideDraft, approveAsIs, textHistory } from "./contentEditor.js";
 
@@ -69,6 +70,8 @@ export function createApp({
   rateLimits = true
 }) {
   const ctx = { db, content, now };
+  // What the readiness check should know about this server's own settings.
+  const readinessEnv = { NODE_ENV: production ? "production" : process.env.NODE_ENV, REQUIRE_2FA: require2fa ? "1" : "", SMS_PROVIDER: providerName, WEBHOOK_SECRET: webhookSecret || "", BACKUP_DIR: backupDir || "" };
   const guards = staffGuards({ db, now, enabled: staffAuth });
   const { staff, need } = guards;
   const gateway = webhookGuard(webhookSecret);
@@ -91,6 +94,11 @@ export function createApp({
     app.use("/api/staff/login", rateLimit({ max: 20, windowMs: tenMin, now: () => now().getTime() }));
     app.use("/api/auth/request-code", rateLimit({ max: 10, windowMs: tenMin, now: () => now().getTime() }));
     app.use("/api/auth/verify", rateLimit({ max: 30, windowMs: tenMin, now: () => now().getTime() }));
+    // Farmers: questions (with photos) and pest reports, per signed-in phone (not per IP: many phones
+    // share one mobile-network address). Generous for a farmer syncing an offline outbox.
+    const perFarmer = rateLimit({ max: 40, windowMs: tenMin, now: () => now().getTime(), key: (req) => req.get("authorization") ?? req.ip, message: "Too many messages. Please wait a few minutes." });
+    app.use("/api/me/questions", (req, res, next) => (req.method === "POST" ? perFarmer(req, res, next) : next()));
+    app.use("/api/me/reports", (req, res, next) => (req.method === "POST" ? perFarmer(req, res, next) : next()));
   }
 
   // The officer dashboard, staff pages and USSD simulator: http://localhost:3000/prototype/...
@@ -338,9 +346,11 @@ export function createApp({
   // ---- Message log ----
   // In development (SMS_PROVIDER=log, nothing reaches real phones) the USSD simulator reads one
   // phone's inbox without logging in. Otherwise only admins can read messages.
+  // Never in production: the inbox holds farmers' sign-in codes.
+  const demoInbox = providerName === "log" && !production;
   const [mustLogIn, mayReadMessages] = need("messages:read");
   const messagesGuard = (req, res, next) =>
-    providerName === "log" && req.query.phone ? next() : mustLogIn(req, res, () => mayReadMessages(req, res, next));
+    demoInbox && req.query.phone ? next() : mustLogIn(req, res, () => mayReadMessages(req, res, next));
   app.get("/api/messages", messagesGuard, async (req, res) => {
     const phone = req.query.phone ? normalizePhone(req.query.phone) : undefined;
     if (req.query.phone && !phone) return res.status(400).json({ error: "Invalid phone" });
@@ -474,6 +484,13 @@ export function createApp({
     res.json(result);
   });
 
+  // Pilot readiness: settings, staff, content, backups and field-test health in one list.
+  app.get("/api/admin/readiness", ...need("audit:read"), async (req, res) => res.json(await pilotReadiness(db, content, { now: now(), env: { ...process.env, ...readinessEnv } })));
+  app.post("/api/admin/restore-drill", ...need("audit:read"), async (req, res) => {
+    const r = await restoreDrill(db, { backupDir, now: now() });
+    await audit(db, req.staff, "restore.drill", r.file ?? null, { ok: r.ok, rows: r.rows, error: r.error });
+    res.json(r);
+  });
   app.get("/api/admin/status", ...need("audit:read"), async (req, res) => {
     res.json({ ...(await systemStatus(db, { now: now(), backupDir, smsProvider: providerName })), recent_errors: await recentErrors(db, 10) });
   });
@@ -484,7 +501,7 @@ export function createApp({
     res.json({ ...result, file: result.file.split(/[\\/]/).pop(), kept: listBackupFiles(backupDir).length });
   });
 
-  farmerRoutes(app, ctx, { exposeDevCode: providerName === "log" });
+  farmerRoutes(app, ctx, { exposeDevCode: demoInbox }); // the sign-in code on screen: local demo only
 
   app.use((req, res) => res.status(404).json({ error: "Not found" }));
 

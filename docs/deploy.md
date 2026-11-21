@@ -85,7 +85,14 @@ Test with the team's own phones on **both** Lonestar Cell MTN and Orange before 
   0 3 * * * rsync -a ~/agriconnect/deploy/backups/ backup-user@other-server:agriconnect-backups/
   ```
 
-### Restore drill (practise it once a month)
+### Restore drill (once a month, and after every upgrade)
+The safe drill never touches the live data: it restores the newest backup into a separate, empty database and checks every table.
+```bash
+docker compose exec api npm run restore-drill
+```
+Or click **Run restore drill** on *Staff & security* → *System status*. The result is shown there; the status warns if no drill passed in the last 30 days.
+
+### A real restore (when data has been lost)
 ```bash
 cd ~/agriconnect/deploy
 docker compose stop api
@@ -126,6 +133,11 @@ Docker stops the old version cleanly (the server finishes current requests, stop
 - The server refuses to start in production with the dashboard login switched off, or with a real SMS provider and no `WEBHOOK_SECRET`.
 
 ## Checklist before real farmers use it
+Run the readiness check: it tests most of this list for you and exits with an error while anything blocks the pilot. The same list is on *Staff & security* → *Pilot readiness*.
+```bash
+docker compose exec api npm run preflight
+```
+
 - [ ] HTTPS works at your domain; the uptime monitor is on `/ready`
 - [ ] First admin created with `create-admin`; 2-step login on; **no** demo accounts
 - [ ] Every officer has their own account with the right counties
@@ -133,5 +145,5 @@ Docker stops the old version cleanly (the server finishes current requests, stop
 - [ ] SMS tested on Lonestar Cell MTN and Orange with team phones
 - [ ] Daily off-site copy of `deploy/backups/` set up, and one restore drill done
 - [ ] `ERROR_WEBHOOK_URL` set, and a test alert seen
-- [ ] All content reviewed by an agronomist (`"status": "approved"`)
+- [ ] Every English advice text approved by an agronomist in *Advice content*
 - [ ] System status shows **ALL GOOD**

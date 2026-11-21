@@ -161,3 +161,32 @@ test("admin status and backup-now are admin-only", async () => {
     assert.ok(Array.isArray(st.recent_errors));
   } finally { await s.close(); }
 });
+
+// ---------------------------------------------------------------- restore drill (Sprint 6)
+test("restore drill: the newest backup is restored into a separate database and every table matches", async () => {
+  const { restoreDrill } = await import("../src/ops.js");
+  await db.run("INSERT INTO farmers (phone, county, consent_at) VALUES ('+231777000001', 'Bong', '2026-01-01 00:00:00')");
+  const f = await db.get("SELECT id FROM farmers WHERE phone = '+231777000001'");
+  await db.run("INSERT INTO farmer_crops (farmer_id, crop, planting_month) VALUES (?, 'rice', 5)", f.id);
+  const before = (await systemStatus(db, { now: new Date(), backupDir: dir, smsProvider: "africastalking" })).warnings;
+  assert.ok(before.some((w) => w.includes("No restore drill yet")));
+
+  await backupDatabase(db, dir);
+  const r = await restoreDrill(db, { backupDir: dir });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.farmers, 1);
+  assert.deepEqual(r.differences, []);
+  assert.equal((await db.get("SELECT COUNT(*) AS n FROM farmers")).n, 1); // the live database is untouched
+  const s = await systemStatus(db, { now: new Date(), backupDir: dir, smsProvider: "africastalking" });
+  assert.equal(s.restore_drill.ok, true);
+  assert.ok(!s.warnings.some((w) => w.includes("restore drill")));
+
+  // Without backups it makes a fresh one; a damaged backup fails the drill and says so.
+  assert.equal((await restoreDrill(db, {})).ok, true);
+  const { writeFileSync, readdirSync } = await import("node:fs");
+  const newest = readdirSync(dir).filter((n) => n.startsWith("agriconnect-")).sort().reverse()[0];
+  writeFileSync(`${dir}/${newest}`, "not a backup");
+  const bad = await restoreDrill(db, { backupDir: dir });
+  assert.equal(bad.ok, false);
+  assert.ok((await systemStatus(db, { now: new Date(), backupDir: dir, smsProvider: "africastalking" })).warnings.some((w) => w.includes("restore drill FAILED")));
+});

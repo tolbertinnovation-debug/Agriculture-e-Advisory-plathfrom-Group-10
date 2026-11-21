@@ -6,7 +6,15 @@ export function securityHeaders({ https = false } = {}) {
     res.set("X-Content-Type-Options", "nosniff");
     res.set("Referrer-Policy", "same-origin");
     res.set("X-Frame-Options", "DENY");
-    res.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    // The farmer app may use the camera (photo questions are picked with the phone's camera).
+    res.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+    // Pages only load code, styles and pictures from this server, and only talk to this server.
+    // (Inline scripts are allowed because the pages keep their script in the HTML file.)
+    res.set("Content-Security-Policy", [
+      "default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:", "connect-src 'self'", "object-src 'none'", "base-uri 'self'",
+      "form-action 'self'", "frame-ancestors 'none'"
+    ].join("; "));
     if (https) res.set("Strict-Transport-Security", "max-age=31536000");
     next();
   };
@@ -36,11 +44,11 @@ export function cors(origins) {
  * At most `max` requests per IP address in `windowMs`. In memory: fine for one server.
  * (Accounts are also locked after 5 wrong passwords; this stops one address guessing many accounts.)
  */
-export function rateLimit({ max, windowMs, now = () => Date.now(), message = "Too many tries. Please wait a few minutes." }) {
+export function rateLimit({ max, windowMs, now = () => Date.now(), message = "Too many tries. Please wait a few minutes.", key: keyOf = (req) => req.ip ?? "unknown" }) {
   const hits = new Map();
   return (req, res, next) => {
     const t = now();
-    const key = req.ip ?? "unknown";
+    const key = keyOf(req);
     const list = (hits.get(key) ?? []).filter((x) => t - x < windowMs);
     if (list.length >= max) {
       res.set("Retry-After", String(Math.ceil((windowMs - (t - list[0])) / 1000)));

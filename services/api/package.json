@@ -15,6 +15,9 @@
     "backup": "node --no-warnings=ExperimentalWarning scripts/backup.js",
     "restore": "node --no-warnings=ExperimentalWarning scripts/restore.js",
     "sqlite-to-postgres": "node --no-warnings=ExperimentalWarning scripts/sqlite-to-postgres.js",
+    "restore-drill": "node --no-warnings=ExperimentalWarning scripts/restore-drill.js",
+    "load-test": "node --no-warnings=ExperimentalWarning scripts/load-test.js",
+    "preflight": "node --no-warnings=ExperimentalWarning scripts/preflight.js",
     "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js"
   },
   "dependencies": {

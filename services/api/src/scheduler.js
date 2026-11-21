@@ -108,6 +108,8 @@ export async function backupDue(db, now, hour) {
   return !(await db.get("SELECT 1 AS x FROM backups WHERE ok = 1 AND substr(created_at, 1, 10) = ?", now.toISOString().slice(0, 10)));
 }
 
+const SEND_BATCH = 100;
+
 /**
  * Start the background workers inside the API process:
  *  - the SMS sender, every `sendEveryMs`
@@ -124,8 +126,16 @@ export async function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs 
     if (sending) return;
     sending = true;
     try {
-      const r = await deliverQueued(ctx.db, provider, { now: ctx.now() });
-      if (r.sent || r.retrying || r.failed) log.log(`SMS via ${provider.name}: ${r.sent} sent, ${r.retrying} will retry, ${r.failed} failed`);
+      // Keep sending batch after batch while there is a queue (a big advisory), for up to 30 s,
+      // then let the next tick carry on. Small queues go in one batch, as before.
+      const total = { sent: 0, retrying: 0, failed: 0 };
+      const started = Date.now();
+      for (;;) {
+        const r = await deliverQueued(ctx.db, provider, { now: ctx.now(), limit: SEND_BATCH });
+        for (const k of Object.keys(total)) total[k] += r[k];
+        if (r.sent + r.retrying + r.failed < SEND_BATCH || Date.now() - started > 30000) break;
+      }
+      if (total.sent || total.retrying || total.failed) log.log(`SMS via ${provider.name}: ${total.sent} sent, ${total.retrying} will retry, ${total.failed} failed`);
     } catch (err) {
       await recordError(ctx.db, err, { job: "sms" });
     } finally {
