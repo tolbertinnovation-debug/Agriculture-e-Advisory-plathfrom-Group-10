@@ -1,4 +1,5 @@
 // The HTTP API. createApp() takes its database and content so tests can pass in-memory ones.
+import { isOn } from "./flags.js";
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -73,7 +74,7 @@ export function createApp({
   // DEMO_MODE=1: a public demo with sample data and no real SMS (SMS_PROVIDER=log only). Sign-in codes are
   // shown on screen and the simulator can read any phone's SMS. Never with real farmers: the readiness
   // check blocks the pilot while it is on, and it is refused with a real SMS provider.
-  demoMode = process.env.DEMO_MODE === "1"
+  demoMode = isOn(process.env.DEMO_MODE)
 }) {
   if (demoMode && providerName !== "log") throw new Error("DEMO_MODE=1 is only allowed with SMS_PROVIDER=log (no real SMS). Turn DEMO_MODE off before connecting an SMS provider.");
   const ctx = { db, content, now };
@@ -114,7 +115,9 @@ export function createApp({
   // for offline pest diagnosis, so the two can never disagree.
   app.get("/app/engine.js", async (req, res) => res.type("application/javascript").sendFile(resolve(HERE, "engine.js")));
   app.use("/app", express.static(FARMER_APP_DIR));
-  app.get("/", async (req, res) => res.redirect(demoMode ? "/prototype/demo.html" : "/app/"));
+  // The main address opens the platform itself: the officer dashboard in demo mode (one-click demo
+  // logins), the farmer app otherwise (farmers are the public; staff go to /prototype/dashboard.html).
+  app.get("/", async (req, res) => res.redirect(demoMode ? "/prototype/dashboard.html" : "/app/"));
 
   // Liveness: the process answers. Readiness: the database answers too (used by Docker and uptime monitors).
   app.get("/health", async (req, res) => res.json({ ok: true, service: "agriconnect-api", time: now().toISOString(), ...(demoMode ? { demo: true } : {}) }));

@@ -30,11 +30,12 @@ if (!env.DATABASE_URL) {
 }
 
 const { openDb } = await import("../src/db.js");
+const { isOn } = await import("../src/flags.js");
 const db = await openDb(env.DATABASE_URL, { max: 1 });
 console.log("Database up to date (migrations applied).");
 
 try {
-  if (env.DEMO_MODE === "1") {
+  if (isOn(env.DEMO_MODE)) {
     if ((env.SMS_PROVIDER ?? "log") !== "log") throw new Error("DEMO_MODE=1 is only allowed with SMS_PROVIDER=log");
     const hasStaff = await db.get("SELECT 1 AS x FROM staff LIMIT 1");
     if (!hasStaff) {

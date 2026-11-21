@@ -86,11 +86,16 @@ test("normal mode: production rules (no sign-in codes on screen); demo mode show
 
   const demo = await serve({ DEMO_MODE: "1" });
   try {
-    assert.equal((await demo.call("GET", "/")).headers.get("location"), "/prototype/demo.html");
+    assert.equal((await demo.call("GET", "/")).headers.get("location"), "/prototype/dashboard.html");
     assert.equal((await demo.call("GET", "/health")).body.demo, true);
     assert.match((await demo.call("POST", "/api/auth/request-code", { phone: "0777000001" })).body.dev_code, /^\d{6}$/);
     assert.equal((await demo.call("GET", "/api/messages?phone=0777000001")).status, 200);
   } finally { await demo.close(); }
+
+  // Typed in a dashboard as "true" (or with a space) it still counts as on.
+  const typed = await serve({ DEMO_MODE: " True " });
+  try { assert.match((await typed.call("POST", "/api/auth/request-code", { phone: "0777000002" })).body.dev_code, /^\d{6}$/); }
+  finally { await typed.close(); }
 
   const db = await newDb();
   try { assert.throws(() => createApp({ db, content, providerName: "africastalking", demoMode: true }), /DEMO_MODE=1 is only allowed/); }

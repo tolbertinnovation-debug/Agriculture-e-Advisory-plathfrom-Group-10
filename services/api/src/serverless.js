@@ -6,6 +6,7 @@
 //  - once a day, Vercel Cron calls /api/cron/daily: weather, crop advice, "Did it help?", a restore
 //    drill and the SMS queue (protected by CRON_SECRET).
 // Settings are environment variables, as on a server (see docs/vercel.md).
+import { isOn } from "./flags.js";
 import express from "express";
 import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -27,7 +28,7 @@ export function checkSettings(env, provider) {
   if (!env.DATABASE_URL) fatal.push("DATABASE_URL is not set: connect a PostgreSQL database (Vercel → Storage → Neon)");
   if (env.STAFF_AUTH === "off") fatal.push("STAFF_AUTH=off is not allowed on a public server");
   if (provider.name !== "log" && !env.WEBHOOK_SECRET) fatal.push("WEBHOOK_SECRET must be set when a real SMS provider is used");
-  if (env.DEMO_MODE === "1" && provider.name !== "log") fatal.push("DEMO_MODE=1 is only allowed with SMS_PROVIDER=log");
+  if (isOn(env.DEMO_MODE) && provider.name !== "log") fatal.push("DEMO_MODE=1 is only allowed with SMS_PROVIDER=log");
   return fatal;
 }
 
@@ -45,7 +46,7 @@ export function createServerlessApp({ db, content, provider, env = process.env, 
     webhookSecret: env.WEBHOOK_SECRET,
     weatherUrl: env.WEATHER_URL,
     production: true,
-    demoMode: env.DEMO_MODE === "1",
+    demoMode: isOn(env.DEMO_MODE),
     trustProxy: true
   });
   const outer = express();

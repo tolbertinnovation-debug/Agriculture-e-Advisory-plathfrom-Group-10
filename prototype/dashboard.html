@@ -38,7 +38,11 @@
   #login .brand .mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--forest); color: #fff; }
   #login h3 { font-size: 20px; margin: 0; }
   #login .login-form { max-width: none !important; }
-  #login .act, #login button[type=submit], #login .login-form button { width: 100%; padding: 11px; font-size: 14px; }
+  #login .login-form button { width: 100%; padding: 11px; font-size: 14px; }
+  .demo-sep { display: flex; align-items: center; gap: 10px; margin: 18px 0 12px; color: var(--muted); font-size: 12.5px; }
+  .demo-sep::before, .demo-sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .demo-grid .act { padding: 10px; font-size: 13px; justify-content: flex-start; }
 
   /* ---------- cards and grids ---------- */
   .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
@@ -164,7 +168,9 @@
     <div class="group">Admin</div>
     <a href="content.html" data-perm="content:read"><svg class="i"><use href="#i-file-text"/></svg> Advice content</a>
     <a href="staff.html"><svg class="i"><use href="#i-shield-check"/></svg> Staff &amp; security</a>
-    <a href="ussd.html"><svg class="i"><use href="#i-smartphone"/></svg> USSD simulator</a>
+    <div class="group">Other apps</div>
+    <a href="/app/" id="farmerAppLink"><svg class="i"><use href="#i-sprout"/></svg> Farmer app</a>
+    <a href="ussd.html"><svg class="i"><use href="#i-smartphone"/></svg> USSD simulator (*347#)</a>
     <div class="foot">RETRAP AgTech Hackathon · Group 10</div>
   </aside>
   <main>
@@ -177,6 +183,16 @@
       <div class="brand"><span class="mark"><svg class="i i-lg"><use href="#i-sprout"/></svg></span><div><h3>Staff login</h3><div class="muted">AgriConnect extension officer portal</div></div></div>
       <p class="muted" style="margin:0 0 14px">Use your own AgriConnect account. Ask your admin if you don't have one.</p>
       <div id="loginForm"></div>
+      <div id="demoLogins" class="hide">
+        <div class="demo-sep"><span>or try it instantly (demo)</span></div>
+        <div class="demo-grid">
+          <button class="act ghost" data-demo="mulbah@agriconnect.test" data-pw="demo-officer-2026"><svg class="i"><use href="#i-user"/></svg> Extension officer</button>
+          <button class="act ghost" data-demo="admin@agriconnect.test" data-pw="demo-admin-2026"><svg class="i"><use href="#i-shield-check"/></svg> Admin</button>
+          <button class="act ghost" data-demo="agronomist@agriconnect.test" data-pw="demo-agronomist-2026"><svg class="i"><use href="#i-badge-check"/></svg> Agronomist</button>
+          <button class="act ghost" data-demo="kerkula@agriconnect.test" data-pw="demo-lead-2026"><svg class="i"><use href="#i-user-plus"/></svg> Lead farmer</button>
+        </div>
+        <p class="muted" style="margin:12px 0 0;font-size:12.5px">Also try the <a href="/app/">farmer app</a> (sign in with 0770000001; the code shows on screen) and the <a href="ussd.html">*347# simulator</a>. Sample data only.</p>
+      </div>
     </div>
 
     <div id="dashBody" style="display:contents">
@@ -893,7 +909,24 @@ async function start() {
 
 (async () => {
   $("#bCounty").innerHTML += COUNTIES.map((c) => `<option>${esc(c)}</option>`).join("");
-  if (API) { try { live = (await fetch(API + "/health")).ok; } catch {} }
+  let demoServer = false;
+  if (API) { try { const h = await fetch(API + "/health"); live = h.ok; demoServer = live && !!(await h.json()).demo; } catch {} }
+  if (demoServer) {
+    // Demo server: one click logs in as a demo account (sample data only; these passwords are public).
+    $("#demoLogins").classList.remove("hide");
+    $("#demoLogins").onclick = async (e) => {
+      const b = e.target.closest("button[data-demo]");
+      if (!b) return;
+      b.disabled = true;
+      try {
+        const r = await StaffAuth.api(API, "POST", "/api/staff/login", { email: b.dataset.demo, password: b.dataset.pw });
+        StaffAuth.set(r.token);
+        start();
+      } catch (err) { toast(err.message, true); }
+      b.disabled = false;
+    };
+  }
+  if (!live) $("#farmerAppLink").href = "index.html"; // no server: the clickable mock-up
   $("#signout").onclick = async () => { await StaffAuth.logout(API); showLogin(); };
   $("#mode").className = "mode " + (live ? "live" : "demo");
   $("#mode").textContent = live ? "Live data" : "Demo: sample data (start the API for live data)";

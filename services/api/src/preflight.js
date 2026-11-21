@@ -2,6 +2,7 @@
 // system, in one list. Used by `npm run preflight` on the server and by the admin's
 // "Pilot readiness" card. Each check: { area, name, ok, detail, blocking }.
 // blocking = the pilot must not start until it passes; the others are strong advice.
+import { isOn } from "./flags.js";
 import { sqlDaysAgo, sqlNow } from "./db.js";
 import { listContent } from "./contentEditor.js";
 import { lastBackup, lastRestoreDrill } from "./ops.js";
@@ -14,7 +15,7 @@ export async function pilotReadiness(db, content, { env = process.env, now = new
 
   // ---- Server settings
   add("Server", "Runs in production mode", env.NODE_ENV === "production", "NODE_ENV=production");
-  add("Server", "Demo mode is off", env.DEMO_MODE !== "1", env.DEMO_MODE === "1" ? "DEMO_MODE=1 shows sign-in codes on screen: turn it off before real farmers join" : "off");
+  add("Server", "Demo mode is off", !isOn(env.DEMO_MODE), isOn(env.DEMO_MODE) ? "DEMO_MODE=1 shows sign-in codes on screen: turn it off before real farmers join" : "off");
   add("Server", "2-step login is required for all staff", env.REQUIRE_2FA === "1", "REQUIRE_2FA=1");
   const provider = env.SMS_PROVIDER ?? "log";
   add("Server", "A real SMS provider is set", provider !== "log", provider === "log" ? "SMS_PROVIDER is 'log': nothing reaches phones" : `SMS_PROVIDER=${provider}`);
