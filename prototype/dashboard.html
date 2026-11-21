@@ -549,7 +549,7 @@ function renderFieldTest(ft) {
   if (cr) {
     $("#crRate").textContent = `${cr.en.approved} of ${cr.en.total}`;
     $("#crRate").style.color = cr.all_en_approved ? "var(--forest)" : "var(--red)";
-    $("#crNote").innerHTML = `English SMS texts ${cr.all_en_approved ? "· all approved" : "· every text must be approved before the pilot"}${cr.drafts ? ` · ${cr.drafts} draft(s) waiting` : ""}${has("content:read") ? ' · <a href="content.html">open the content editor</a>' : ""}`;
+    $("#crNote").innerHTML = `English SMS texts ${cr.all_en_approved ? "· all approved" : "· every text must be approved before the pilot"}${cr.drafts ? ` · ${cr.drafts} draft(s) waiting` : ""}${live && has("content:read") ? ' · <a href="content.html">open the content editor</a>' : ""}`;
   }
   $("#fbPests").innerHTML = f.by_pest.filter((p) => p.answered).map((p) => `<div class="bar"><span>${esc(p.pest_name)}</span><div class="track"><i style="width:${100 * p.helped_rate}%"></i></div><b>${pct(p.helped_rate)}</b></div>`).join("");
 }
@@ -903,6 +903,9 @@ async function start() {
   } else {
     document.body.classList.remove("signed-out"); // demo mode: no login, show everything
     $("#hello").textContent = "Overview (sample data)";
+    // These pages need the AgriConnect server; in a demo with no server, link back to the demo start page instead.
+    document.querySelectorAll('aside.nav a[href="content.html"], aside.nav a[href="staff.html"]').forEach((a) => a.classList.add("hide"));
+    $("aside.nav .foot").insertAdjacentHTML("beforebegin", `<a href="demo.html">${ic("arrow-left")} Demo home</a>`);
     $("#bCrop").innerHTML += Object.keys(CROP_GUIDES).map((c) => `<option>${esc(c)}</option>`).join("");
     demo();
   }
