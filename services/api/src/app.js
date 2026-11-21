@@ -114,7 +114,9 @@ export function createApp({
   // for offline pest diagnosis, so the two can never disagree.
   app.get("/app/engine.js", async (req, res) => res.type("application/javascript").sendFile(resolve(HERE, "engine.js")));
   app.use("/app", express.static(FARMER_APP_DIR));
-  app.get("/", async (req, res) => res.redirect(demoMode ? "/prototype/demo.html" : "/app/"));
+  // The main address opens the platform itself: the officer dashboard in demo mode (one-click demo
+  // logins), the farmer app otherwise (farmers are the public; staff go to /prototype/dashboard.html).
+  app.get("/", async (req, res) => res.redirect(demoMode ? "/prototype/dashboard.html" : "/app/"));
 
   // Liveness: the process answers. Readiness: the database answers too (used by Docker and uptime monitors).
   app.get("/health", async (req, res) => res.json({ ok: true, service: "agriconnect-api", time: now().toISOString(), ...(demoMode ? { demo: true } : {}) }));
