@@ -42,6 +42,7 @@ const DEMO_STAFF = [
   { email: "admin@agriconnect.test", name: "Demo Admin", role: "admin", counties: [], password: "demo-admin-2026" },
   { email: "mulbah@agriconnect.test", name: "Officer Mulbah", role: "officer", counties: ["Bong", "Lofa", "Nimba"], districts: ["Salala", "Ganta"], password: "demo-officer-2026", phone: "0886000099" },
   { email: "editor@agriconnect.test", name: "Content Editor", role: "editor", counties: [], password: "demo-editor-2026" },
+  { email: "agronomist@agriconnect.test", name: "Agronomist Flomo", role: "agronomist", counties: [], password: "demo-agronomist-2026" },
   { email: "partner@agriconnect.test", name: "Partner Viewer", role: "viewer", counties: [], password: "demo-viewer-2026" },
   { email: "kerkula@agriconnect.test", name: "Lead Farmer Kerkula", role: "lead", counties: ["Bong"], password: "demo-lead-2026" }
 ];

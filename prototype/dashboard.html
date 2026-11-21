@@ -97,6 +97,7 @@
     <a href="#regRow" data-perm="registrations:create">📝 Register farmers</a>
     <a href="#farmers" data-perm="farmers:read">👩🏾‍🌾 Farmers</a>
     <a href="#fieldTest" data-perm="stats:read">🧪 Field test</a>
+    <a href="content.html" data-perm="content:read">📝 Advice content</a>
     <a href="staff.html">🔐 Staff &amp; security</a>
     <a href="ussd.html">📱 USSD simulator</a>
   </aside>
@@ -134,6 +135,9 @@
       <div class="ft">
         <div><div class="l">Finish signing up on *347#</div><div class="v" id="ftRate">–</div><div class="muted" id="ftNote"></div><div id="ftSteps" style="margin-top:8px"></div></div>
         <div><div class="l">“Did it help?” after a pest report</div><div class="v" id="fbRate">–</div><div class="muted" id="fbNote"></div><div id="fbPests" style="margin-top:8px"></div></div>
+      </div>
+      <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+        <span class="l" style="font-size:13px;font-weight:700">Advice approved by an agronomist</span><b id="crRate" style="font-size:20px">–</b><span class="muted" id="crNote"></span>
       </div>
     </div>
 
@@ -467,6 +471,12 @@ function renderFieldTest(ft) {
   $("#fbNote").innerHTML = f.asked
     ? `${n(f.yes)} yes · ${n(f.no)} no (an officer calls back) · ${n(f.answered)} of ${n(f.asked)} answered`
     : "Asked by SMS 3 days after a pest report. No answers yet.";
+  const cr = ft.content_review;
+  if (cr) {
+    $("#crRate").textContent = `${cr.en.approved} of ${cr.en.total}`;
+    $("#crRate").style.color = cr.all_en_approved ? "var(--forest)" : "var(--red)";
+    $("#crNote").innerHTML = `English SMS texts ${cr.all_en_approved ? "✓ all approved" : "· every text must be approved before the pilot"}${cr.drafts ? ` · ${cr.drafts} draft(s) waiting` : ""}${has("content:read") ? ' · <a href="content.html">open the content editor</a>' : ""}`;
+  }
   $("#fbPests").innerHTML = f.by_pest.filter((p) => p.answered).map((p) => `<div class="bar"><span>${esc(p.pest_name)}</span><div class="track"><i style="width:${100 * p.helped_rate}%"></i></div><b>${pct(p.helped_rate)}</b></div>`).join("");
 }
 
@@ -765,6 +775,7 @@ function demo() {
   $("#fCounty").innerHTML = '<option value="">All counties</option>' + COUNTIES.map((c) => `<option>${esc(c)}</option>`).join("");
   renderFieldTest({
     ussd_signup: { started: 52, registered: 41, cancelled: 3, abandoned: 6, in_progress: 2, completion_rate: 41 / 50, target: 0.8, meets_target: true, gave_up_at: { language: 1, county: 3, crop: 0, month: 2, consent: 3 } },
+    content_review: { en: { total: 26, approved: 19 }, translations: { total: 4, approved: 2 }, drafts: 3, all_en_approved: false },
     did_it_help: { asked: 38, answered: 29, yes: 23, no: 6, helped_rate: 23 / 29, by_pest: [{ pest_name: "Fall armyworm", answered: 17, helped_rate: 15 / 17 }, { pest_name: "Rice blast", answered: 8, helped_rate: 5 / 8 }, { pest_name: "Cassava mosaic disease", answered: 4, helped_rate: 3 / 4 }] }
   });
   farmerTotal = 3;

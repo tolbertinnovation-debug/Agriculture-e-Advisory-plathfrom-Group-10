@@ -89,7 +89,8 @@
         <label class="field">Role
           <select name="role">
             <option value="officer">Officer: reports, questions and advisories for their counties</option>
-            <option value="editor">Editor: market prices, reporters, weather and advice jobs</option>
+            <option value="editor">Editor: market prices, reporters, weather, advice jobs, and drafts of advice texts</option>
+            <option value="agronomist">Agronomist: checks and approves advice texts before farmers get them</option>
             <option value="viewer">Viewer: numbers only (partners)</option>
             <option value="lead">Lead farmer / co-op agent: registers farmers in their counties (they confirm by SMS)</option>
             <option value="admin">Admin: everything, including staff accounts</option>
@@ -185,7 +186,7 @@ async function renderStaff() {
   $("#staffTable").innerHTML = `<tr><th>Name</th><th>Role</th><th>Counties</th><th>Districts first</th><th>Alert phone</th><th>2-step</th><th>Last login</th><th>Status</th><th></th></tr>` +
     list.map((s) => `<tr>
       <td><b>${esc(s.name)}</b><div class="muted">${esc(s.email)}</div></td>
-      <td><select data-role="${s.id}" ${s.id === me.id ? "disabled" : ""}>${["admin", "officer", "editor", "viewer", "lead"].map((r) => `<option ${r === s.role ? "selected" : ""}>${r}</option>`).join("")}</select></td>
+      <td><select data-role="${s.id}" ${s.id === me.id ? "disabled" : ""}>${["admin", "officer", "editor", "agronomist", "viewer", "lead"].map((r) => `<option ${r === s.role ? "selected" : ""}>${r}</option>`).join("")}</select></td>
       <td>${s.role === "officer" || s.role === "lead" ? `<input data-counties="${s.id}" value="${esc(s.counties.join(", "))}" style="width:170px">` : '<span class="muted">all</span>'}</td>
       <td>${s.role === "officer" ? `<input data-districts="${s.id}" value="${esc((s.districts ?? []).join(", "))}" placeholder="e.g. Salala, Zota" style="width:150px">` : '<span class="muted">–</span>'}</td>
       <td><input data-phone="${s.id}" value="${esc(s.phone ?? "")}" placeholder="none" style="width:130px" ${s.id === me.id ? "disabled" : ""}></td>

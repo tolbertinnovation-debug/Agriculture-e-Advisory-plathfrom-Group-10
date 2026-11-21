@@ -6,6 +6,7 @@ import { dirname, resolve } from "node:path";
 import { openDb } from "./db.js";
 import { loadContent, validateContent } from "./content.js";
 import { createApp } from "./app.js";
+import { applyApprovedTexts } from "./contentEditor.js";
 import { providerFromEnv } from "./providers/index.js";
 import { startWorkers } from "./scheduler.js";
 import { recordError } from "./ops.js";
@@ -50,6 +51,9 @@ const BACKUP_DIR = env.BACKUP_DIR || undefined;
 let db;
 try {
   db = await openDb(DB_TARGET);
+  // Advice texts approved by agronomists in the content editor replace the file texts.
+  const approved = await applyApprovedTexts(db, content);
+  if (approved) console.log(`Content: ${approved} approved text version(s) from the content editor.`);
 } catch (err) {
   console.error(`Cannot open the database (${env.DATABASE_URL ? "DATABASE_URL" : DB_PATH}): ${err.message}`);
   process.exit(1);

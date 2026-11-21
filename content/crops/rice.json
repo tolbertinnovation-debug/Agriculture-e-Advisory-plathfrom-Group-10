@@ -46,6 +46,7 @@
       "name": "Harvest and drying",
       "from_week": 14,
       "to_week": 18,
+      "hold_in_rain": true,
       "sms": { "en": "RICE: Harvest when most grains are golden. Dry on tarpaulin, not bare ground. Dial *347# for market prices" }
     },
     {

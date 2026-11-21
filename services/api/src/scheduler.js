@@ -8,10 +8,11 @@
 // Liberia uses GMT all year, so UTC times are local times.
 import { runFeedbackJob, feedbackRunDue } from "./fieldTest.js";
 import { escalateOverdue } from "./questions.js";
+import { applyApprovedTexts } from "./contentEditor.js";
 import { adviceForFarmer } from "./engine.js";
 import { sendSms, deliverQueued, requeueStuck } from "./messaging.js";
 import { getFarmer } from "./farmers.js";
-import { refreshWeather, sendWeatherAlerts } from "./weather.js";
+import { refreshWeather, sendWeatherAlerts, getForecast } from "./weather.js";
 import { backupDatabase, recordError } from "./ops.js";
 
 export const REMINDER_DAYS = 28;
@@ -29,10 +30,17 @@ export async function sendAdviceToFarmer(ctx, farmer, { dryRun = false } = {}) {
   let sentThisWeek = (await db.get("SELECT COUNT(*) AS n FROM advice_sends WHERE farmer_id = ? AND sent_at >= ?",
     farmer.id, new Date(now.getTime() - 7 * DAY).toISOString())).n;
 
+  let forecast; // read once, only if a stage needs it
   for (const advice of adviceForFarmer(farmer, content, now)) {
     const line = { crop: advice.crop, stage: advice.stage };
     if (!advice.message) { results.push({ ...line, action: "no_advice" }); continue; }
     if (farmer.opted_out_at) { results.push({ ...line, action: "opted_out" }); continue; }
+    // Rain override: advice marked hold_in_rain (e.g. "harvest and dry your rice") waits while heavy
+    // rain is forecast for the farmer's county, and goes out on the first clear day.
+    if (content.crops.get(advice.crop)?.stages.find((s) => s.id === advice.stage)?.hold_in_rain) {
+      if (forecast === undefined) forecast = await getForecast(db, farmer.county, now);
+      if (forecast?.advice.level === "rain") { results.push({ ...line, action: "rain_hold" }); continue; }
+    }
     const last = await db.get("SELECT sent_at FROM advice_sends WHERE farmer_id = ? AND crop = ? AND stage = ? ORDER BY sent_at DESC LIMIT 1",
       farmer.id, advice.crop, advice.stage);
     if (last && now - new Date(last.sent_at) < REMINDER_DAYS * DAY) { results.push({ ...line, action: "recent" }); continue; }
@@ -52,7 +60,7 @@ export async function sendAdviceToFarmer(ctx, farmer, { dryRun = false } = {}) {
 /** Run the advice job for every registered farmer. Returns a summary and records the run. */
 export async function runAdviceJob(ctx, { dryRun = false, trigger = "manual" } = {}) {
   const { db } = ctx;
-  const summary = { farmers: 0, sent: 0, recent: 0, cap: 0, opted_out: 0, no_advice: 0, dry_run: dryRun };
+  const summary = { farmers: 0, sent: 0, recent: 0, cap: 0, opted_out: 0, no_advice: 0, rain_hold: 0, dry_run: dryRun };
   const ids = (await db.all("SELECT id FROM farmers ORDER BY id")).map((r) => r.id);
   for (const id of ids) {
     summary.farmers++;
@@ -150,6 +158,8 @@ export async function startWorkers(ctx, provider, { adviceHour = 7, sendEveryMs 
           const f = await runFeedbackJob(ctx);
           if (f.asked) log.log(`"Did it help?" SMS sent about ${f.asked} pest report(s).`);
         }
+        // Texts approved on another server go live here too (checked every minute).
+        await applyApprovedTexts(ctx.db, ctx.content);
         if (scheduler) {
           const e = await escalateOverdue(ctx); // checked every minute
           if (e.escalated) log.log(`${e.escalated} question(s) waited over 24 hours: escalated.`);

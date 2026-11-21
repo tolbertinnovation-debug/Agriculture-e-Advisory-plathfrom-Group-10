@@ -186,6 +186,16 @@ Text questions (SMS `ASK`, `*347#` → 5, the app), call-backs on `*347#` and th
 | S4.2 | **Routing**: each question goes to one officer: one who covers the farmer's district first, then the least busy officer in the county. Dashboard shows who has it, "Mine only" filter, "Take it"; admins can hand questions on | ✅ Done |
 | S4.3 | **24-hour escalation**: an unanswered question is marked "Over 24h" and moved to the top; the county's officers and admins with an alert phone get an SMS and the farmer is told they are not forgotten. Checked every minute, once per question | ✅ Done |
 
+### Phase 2 · Sprint 5: weather, prices, content tools
+
+The weather service (Open-Meteo per county, rain alerts) and market prices (SMS reporting, unusual-price check, USSD lookup) were built during the hackathon. This sprint adds:
+
+| # | Work | Status |
+|---|---|---|
+| S5.1 | **Content editor** (`prototype/content.html`): every crop-stage SMS and Pest Doctor reply, in English, Kpelle, Bassa and Kissi. Editors write drafts; a new **agronomist** role approves or rejects them (with a note); nobody approves their own draft; texts must fit one SMS; full history; approved texts go live at once and are loaded at every start. Agronomists can also approve a file text as written | ✅ Done |
+| S5.2 | **Review progress for the exit criterion** "All advisories in production are approved by an agronomist": shown in the editor and on the dashboard's Field test card | ✅ Done |
+| S5.3 | **Rain override**: crop stages marked `hold_in_rain` (rice harvest and drying) wait while heavy rain is forecast for the farmer's county and go out on the first clear day | ✅ Done |
+
 **Sprint 2 is done.** The platform is ready for the 30–50 farmer field test. Still needed from outside the code: an SMS/USSD account for the real-phone test (Sprint 1, item 2.4) and an agronomist's review of the content.
 
 ## Next 7 days
