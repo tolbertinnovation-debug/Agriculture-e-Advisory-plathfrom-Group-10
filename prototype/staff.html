@@ -9,18 +9,14 @@
   body { background: var(--paper); }
   main { max-width: 1100px; margin: 0 auto; padding: 26px 20px 60px; display: flex; flex-direction: column; gap: 18px; }
   .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .top h1 { margin: 0; font-size: 24px; }
+  .top h1 { margin: 0; font-size: 24px; font-weight: 750; display: flex; align-items: center; gap: 12px; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
-  .field input, .field select { font: inherit; font-weight: 400; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
-  .act { border: 0; border-radius: 8px; font-weight: 800; font-size: 12.5px; padding: 7px 11px; cursor: pointer; background: var(--forest); color: #fff; }
-  .act.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--ink); }
-  .act.danger { background: var(--red-soft); color: var(--red); }
+  .field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .field input, .field select { font-weight: 400; }
   .stack { display: flex; flex-direction: column; gap: 10px; }
   .secret { font-family: "Courier New", monospace; font-size: 18px; font-weight: 700; letter-spacing: 2px; background: var(--leaf-soft); padding: 10px 12px; border-radius: 10px; word-break: break-all; }
   .once { background: var(--gold-soft); border: 1px solid #E8D39A; border-radius: 10px; padding: 12px; font-size: 14px; }
   .once code { font-size: 18px; font-weight: 800; }
-  .status { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
   .on { background: var(--leaf-soft); color: var(--forest); } .off { background: var(--red-soft); color: var(--red); } .grey { background: #ECEAE4; color: var(--muted); }
   .counties { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 10px; font-size: 13px; }
   .counties label { display: flex; gap: 6px; align-items: center; }
@@ -28,16 +24,19 @@
   .msg { font-weight: 700; margin: 0; }
   .msg.bad { color: var(--red); } .msg.good { color: var(--forest); }
   .hide { display: none !important; }
-  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--forest); color: #fff; padding: 14px 18px; border-radius: 12px; font-weight: 700; display: none; max-width: 420px; }
-  #toast.bad { background: var(--red); }
+  #toast { box-shadow: var(--shadow-lg); border-left: 4px solid var(--leaf); background: #12251A !important; position: fixed; bottom: 24px; right: 24px; background: var(--forest); color: #fff; padding: 14px 18px; border-radius: 12px; font-weight: 700; display: none; max-width: 420px; }
+  #toast.bad { border-left-color: #F97066; }
   @media (max-width: 860px) { .row { grid-template-columns: 1fr; } .counties { grid-template-columns: 1fr 1fr; } }
 </style>
 </head>
 <body>
+<header class="pagebar"><div class="pagebar-in">
+  <a class="brand" href="dashboard.html"><span class="mark"><svg class="i"><use href="#i-sprout"/></svg></span> AgriConnect</a>
+  <div style="display:flex;gap:8px;align-items:center"><a class="act ghost" href="dashboard.html"><svg class="i"><use href="#i-arrow-left"/></svg> Dashboard</a><button class="act ghost hide" id="signout"><svg class="i"><use href="#i-log-out"/></svg> Sign out</button></div>
+</div></header>
 <main>
   <div class="top">
-    <div><div class="eyebrow">AgriConnect · Officer portal</div><h1>Staff &amp; security</h1></div>
-    <div style="display:flex;gap:8px;align-items:center"><a class="act ghost" href="dashboard.html" style="text-decoration:none">← Dashboard</a><button class="act ghost hide" id="signout">Sign out</button></div>
+    <div><div class="eyebrow">Officer portal</div><h1><span class="h-ic"><svg class="i"><use href="#i-shield-check"/></svg></span>Staff &amp; security</h1></div>
   </div>
 
   <div class="card hide" id="login"><h3>Staff login</h3><div id="loginForm"></div></div>
@@ -112,6 +111,7 @@
   </div>
 </main>
 <div id="toast"></div>
+<script src="assets/icons.js"></script>
 <script src="staff-auth.js"></script>
 <script>
 const API = new URLSearchParams(location.search).get("api") || location.origin;

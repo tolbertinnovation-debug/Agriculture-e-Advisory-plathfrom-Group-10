@@ -9,12 +9,7 @@
   body { background: var(--paper); }
   main { max-width: 1100px; margin: 0 auto; padding: 26px 20px 60px; display: flex; flex-direction: column; gap: 16px; }
   .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .top h1 { margin: 0; font-size: 24px; }
-  .act { border: 0; border-radius: 8px; font-weight: 800; font-size: 12.5px; padding: 7px 11px; cursor: pointer; background: var(--forest); color: #fff; text-decoration: none; display: inline-block; }
-  .act.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--ink); }
-  .act.danger { background: var(--red-soft); color: var(--red); }
-  .act:disabled { opacity: .5; cursor: default; }
-  .status { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+  .top h1 { margin: 0; font-size: 24px; font-weight: 750; display: flex; align-items: center; gap: 12px; }
   .ok { background: var(--leaf-soft); color: var(--forest); } .todo { background: var(--gold-soft); color: #7A5A0B; } .grey { background: #ECEAE4; color: var(--muted); } .bad { background: var(--red-soft); color: var(--red); }
   .progress { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
   .progress .v { font-size: 30px; font-weight: 800; color: var(--forest); font-variant-numeric: tabular-nums; }
@@ -40,16 +35,19 @@
   details summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 8px; }
   .hist div { font-size: 13px; border-top: 1px dashed var(--line); padding: 6px 0; }
   .hide { display: none !important; }
-  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--forest); color: #fff; padding: 14px 18px; border-radius: 12px; font-weight: 700; display: none; max-width: 420px; z-index: 5; }
-  #toast.bad { background: var(--red); }
+  #toast { box-shadow: var(--shadow-lg); border-left: 4px solid var(--leaf); background: #12251A !important; position: fixed; bottom: 24px; right: 24px; background: var(--forest); color: #fff; padding: 14px 18px; border-radius: 12px; font-weight: 700; display: none; max-width: 420px; z-index: 5; }
+  #toast.bad { border-left-color: #F97066; }
   @media (max-width: 860px) { .item, .progress { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
+<header class="pagebar"><div class="pagebar-in">
+  <a class="brand" href="dashboard.html"><span class="mark"><svg class="i"><use href="#i-sprout"/></svg></span> AgriConnect</a>
+  <div style="display:flex;gap:8px;align-items:center"><a class="act ghost" href="dashboard.html"><svg class="i"><use href="#i-arrow-left"/></svg> Dashboard</a><button class="act ghost hide" id="signout"><svg class="i"><use href="#i-log-out"/></svg> Sign out</button></div>
+</div></header>
 <main>
   <div class="top">
-    <div><div class="eyebrow">AgriConnect · Officer portal</div><h1>Advice content</h1></div>
-    <div style="display:flex;gap:8px;align-items:center"><a class="act ghost" href="dashboard.html">← Dashboard</a><button class="act ghost hide" id="signout">Sign out</button></div>
+    <div><div class="eyebrow">Officer portal</div><h1><span class="h-ic"><svg class="i"><use href="#i-file-text"/></svg></span>Advice content</h1></div>
   </div>
   <div class="card hide" id="login"><h3>Staff login</h3><div id="loginForm"></div></div>
 
@@ -76,6 +74,7 @@
   </div>
 </main>
 <div id="toast"></div>
+<script src="assets/icons.js"></script>
 <script src="staff-auth.js"></script>
 <script>
 const API = new URLSearchParams(location.search).get("api") || location.origin;
@@ -119,13 +118,13 @@ function itemCard(i, lang) {
       ${can("content:approve") ? `<div class="row-btns">${mineDraft ? '<span class="muted" style="font-size:13px">You wrote this: another agronomist must approve it.</span>' : `<button class="act" data-approve="${draft.id}">Approve</button>`}
         <input class="note" data-note="${draft.id}" placeholder="What should change? (needed to reject)"><button class="act danger" data-reject="${draft.id}">Reject</button></div>` : ""}</div>` : "";
   const asIs = can("content:approve") && t?.source === "file" && !draft ? `<button class="act ghost" data-asis="${esc(i.item)}">Approve as written</button>` : "";
-  const editor = can("content:edit") ? `<details><summary>✏️ ${t?.text ? "Suggest a new text" : `Write the ${LANG[lang]} text`}</summary>
+  const editor = can("content:edit") ? `<details><summary><svg class="i"><use href="#i-pencil"/></svg> ${t?.text ? "Suggest a new text" : `Write the ${LANG[lang]} text`}</summary>
       <textarea rows="3" maxlength="300" data-text="${esc(i.item)}">${esc(draft?.text ?? t?.text ?? (lang !== "en" ? "" : ""))}</textarea>
       <div class="row-btns"><button class="act" data-save="${esc(i.item)}">Save as draft</button><span class="count" data-count="${esc(i.item)}"></span></div></details>` : "";
   const ref = lang !== "en" && i.langs.en?.text ? `<div class="muted" style="font-size:12.5px;margin-top:6px">English: ${esc(i.langs.en.text)}</div>` : "";
   return `<div class="card item" id="${esc(i.item)}">
     <div><div class="name">${esc(i.name)}</div><div class="muted" style="font-size:13px">${where}</div>
-      ${i.hold_in_rain ? '<div class="muted" style="font-size:12.5px;margin-top:4px">☔ Waits while heavy rain is forecast</div>' : ""}
+      ${i.hold_in_rain ? '<div class="muted" style="font-size:12.5px;margin-top:4px"><svg class="i"><use href="#i-cloud-rain"/></svg> Waits while heavy rain is forecast</div>' : ""}
       <div style="margin-top:8px">${badge}</div></div>
     <div>${t?.text ? `<div class="live">${esc(t.text)} <span class="count">(${t.text.length}/160)</span></div>` : ""}${ref}
       ${draftBox}<div class="row-btns">${asIs}</div>${editor}
@@ -150,7 +149,7 @@ function render() {
   }
   $("#list").innerHTML = groups.length
     ? groups.map((g) => `<h2>${esc(g.g)}</h2>` + g.items.map((i) => itemCard(i, lang)).join("")).join("")
-    : `<div class="card empty">${tab === "drafts" ? "No drafts waiting. 🎉" : tab === "todo" ? `Every ${LANG[lang]} text is approved. 🎉` : "No texts."}</div>`;
+    : `<div class="card empty">${tab === "drafts" ? "No drafts waiting." : tab === "todo" ? `Every ${LANG[lang]} text is approved.` : "No texts."}</div>`;
   document.querySelectorAll("textarea[data-text]").forEach(count);
 }
 function count(ta) {

@@ -40,7 +40,9 @@ const state = {
 };
 const save = () => { store.set("home", state.home); store.set("content", state.content); store.set("outbox", state.outbox); store.set("prices", state.prices); store.set("market", state.market); };
 
-const WEATHER_ICON = { rain: "🌧️", dry: "☀️", ok: "⛅" };
+// Icons come from assets/icons.js (Lucide). ic("sprout") → an inline SVG.
+const ic = (name, cls = "i") => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+const WEATHER_ICON = { rain: "cloud-rain", dry: "sun", ok: "cloud-sun" };
 const dayName = (date) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(date + "T12:00:00Z").getUTCDay()];
 
 async function loadPrices(market) {
@@ -143,14 +145,14 @@ function appbar(title, back) {
     ? `<span class="pill offline">● Offline${waiting ? ` · ${waiting} waiting` : ""}</span>`
     : waiting ? `<span class="pill waiting">⟳ Sending ${waiting}…</span>` : `<span class="pill online">● Online</span>`;
   $("#appbar").innerHTML =
-    (back ? `<button class="back" data-go="home" aria-label="Back">←</button>` : `<span style="font-size:22px">🌱</span>`) +
+    (back ? `<button class="back" data-go="home" aria-label="Back">${ic("arrow-left")}</button>` : `<span class="mark">${ic("sprout")}</span>`) +
     `<h1>${esc(title)}</h1>${state.token ? badge : ""}`;
 }
 
 function tabbar() {
-  const tabs = [["home", "🏠", "Home"], ["guide", "📅", "Crops"], ["pest", "🔍", "Pest Doctor"], ["ask", "💬", "Ask"], ["profile", "👤", "Me"]];
-  $("#footer").innerHTML = `<nav class="tabbar">` + tabs.map(([id, ic, l]) =>
-    `<button class="${state.screen === id ? "on" : ""}" data-go="${id}"><span class="ic">${ic}</span>${l}</button>`).join("") + `</nav>`;
+  const tabs = [["home", "house", "Home"], ["guide", "calendar-days", "Crops"], ["pest", "scan-search", "Pest Doctor"], ["ask", "messages-square", "Ask"], ["profile", "user", "Me"]];
+  $("#footer").innerHTML = `<nav class="tabbar">` + tabs.map(([id, icon, l]) =>
+    `<button class="${state.screen === id ? "on" : ""}" data-go="${id}" aria-label="${l}">${ic(icon)}<span>${l}</span></button>`).join("") + `</nav>`;
 }
 
 const errBox = () => (state.error ? `<div class="err">${esc(state.error)}</div>` : "");
@@ -163,7 +165,7 @@ const screens = {
     appbar("AgriConnect", false);
     if (!state.pendingPhone) {
       return `
-        <div class="big-icon">🌱</div>
+        <div class="hero-mark">${ic("sprout")}</div>
         <h2 class="center" style="margin:0">Free farm advice</h2>
         <p class="center muted" style="margin:0">Weather, pest help and answers from extension officers, for Liberian farmers.</p>
         ${errBox()}
@@ -214,28 +216,28 @@ const screens = {
     if (!h) return `<p class="muted">Connect to the internet once to load your farm advice.</p>${errBox()}`;
     const f = h.farmer;
     const alerts = [
-      ...h.alerts.hotspots.map((x) => `<div class="card alert"><b>⚠ ${esc(x.pest_name)} in ${esc(x.county)}</b><p>${x.reports} farmers reported it this week. Check your fields.</p></div>`),
-      ...h.alerts.broadcasts.slice(0, 2).map((b) => `<div class="card alert"><b>📣 Officer advisory · ${esc(when(b.created_at))}</b><p>${esc(b.message)}</p></div>`)
+      ...h.alerts.hotspots.map((x) => `<div class="card alert"><b>${ic("triangle-alert")} ${esc(x.pest_name)} in ${esc(x.county)}</b><p>${x.reports} farmers reported it this week. Check your fields.</p></div>`),
+      ...h.alerts.broadcasts.slice(0, 2).map((b) => `<div class="card alert"><b>${ic("megaphone")} Officer advisory · ${esc(when(b.created_at))}</b><p>${esc(b.message)}</p></div>`)
     ].join("");
     const advice = h.advice.map((a) => a.message
       ? `<div class="card advice"><div class="stage-name">${esc(cropName(a.crop))} · ${esc(a.stage_name)}</div><p>${esc(a.message)}</p></div>`
       : `<div class="card advice"><div class="stage-name">${esc(cropName(a.crop))}</div><p class="muted">Between seasons. We will send advice when your season starts.</p></div>`).join("");
     return `
-      <div><div class="muted">${esc(f.district ? f.district + ", " : "")}${esc(f.county)} County</div><p class="hello">Hello${f.name ? ", " + esc(f.name) : ""} 👋</p></div>
+      <div><div class="muted">${esc(f.district ? f.district + ", " : "")}${esc(f.county)} County</div><p class="hello">Hello${f.name ? ", " + esc(f.name) : ""}</p></div>
       ${h.weather ? `<button class="card weather-hero" data-go="weather" style="text-align:left;font:inherit">
-        <span class="big">${WEATHER_ICON[h.weather.advice.level]}</span>
+        <span class="big">${ic(WEATHER_ICON[h.weather.advice.level], "i wx")}</span>
         <div style="flex:1"><div class="temp">${h.weather.days[0].t_max}°C <span style="font-size:14px;font-weight:700">rain ${h.weather.days[0].rain_prob}%</span></div>
-        <div style="font-size:13px">${esc(h.weather.advice.text)}</div></div><span style="font-size:13px;font-weight:700">5-day ›</span></button>` : ""}
+        <div style="font-size:13px">${esc(h.weather.advice.text)}</div></div><span class="hero-more">5-day ${ic("chevron-right")}</span></button>` : ""}
       ${alerts}
       <div class="eyebrow">This week on your farm</div>
       ${advice}
       <div class="grid">
-        <button class="tile" data-go="guide"><span class="ic">📅</span>Crop Guide</button>
-        <button class="tile" data-go="pest"><span class="ic">🔍</span>Pest Doctor</button>
-        <button class="tile" data-go="ask"><span class="ic">👩🏾‍🌾</span>Ask Expert</button>
-        <button class="tile" data-go="reports"><span class="ic">📋</span>My Reports</button>
-        <button class="tile" data-go="weather"><span class="ic">🌦️</span>Weather</button>
-        <button class="tile" data-go="prices"><span class="ic">💰</span>Prices</button>
+        <button class="tile" data-go="guide"><span class="ic green">${ic("calendar-days")}</span>Crop Guide</button>
+        <button class="tile" data-go="pest"><span class="ic red">${ic("scan-search")}</span>Pest Doctor</button>
+        <button class="tile" data-go="ask"><span class="ic gold">${ic("messages-square")}</span>Ask Expert</button>
+        <button class="tile" data-go="reports"><span class="ic green">${ic("clipboard-list")}</span>My Reports</button>
+        <button class="tile" data-go="weather"><span class="ic blue">${ic("cloud-sun")}</span>Weather</button>
+        <button class="tile" data-go="prices"><span class="ic gold">${ic("coins")}</span>Prices</button>
       </div>
       <p class="muted center" style="margin:0">Updated ${esc(h.date)}</p>`;
   },
@@ -273,7 +275,7 @@ const screens = {
           <span class="match">${r.score}% match</span>
           <h3 style="margin-top:6px">${esc(r.pest.name)}</h3>
           <p style="margin:6px 0 0;font-size:14.5px">${esc(r.pest.sms.en.replace(/ Officer told\.$/, ""))}</p>
-          <p class="muted" style="margin:10px 0 0">${r.queued ? "📤 Saved. It goes to your extension officer as soon as you have network." : "✅ Sent to your extension officer."}</p>
+          <p class="muted" style="margin:10px 0 0">${r.queued ? `${ic("clock")} Saved. It goes to your extension officer as soon as you have network.` : `${ic("circle-check")} Sent to your extension officer.`}</p>
         </div>` : `<div class="card">We could not match these signs. Your report ${r.queued ? "will go" : "went"} to an extension officer, who will call you.</div>` : ""}`;
   },
 
@@ -283,7 +285,7 @@ const screens = {
     if (!w) return `<p class="muted">No forecast yet. Connect to the internet and try again.</p>`;
     return `
       <div class="card ${w.advice.level === "rain" ? "alert" : ""}" style="${w.advice.level === "rain" ? "" : "background:var(--leaf-soft);border-color:#C5DDBF"}">
-        <b>${WEATHER_ICON[w.advice.level]} Farm advice</b><p style="margin:4px 0 0;font-size:15px">${esc(w.advice.text)}</p></div>
+        <b>${ic(WEATHER_ICON[w.advice.level])} Farm advice</b><p style="margin:4px 0 0;font-size:15px">${esc(w.advice.text)}</p></div>
       <div class="card"><h3>Next ${w.days.length} days · chance of rain</h3>
         ${w.days.map((d, i) => `<div class="day"><span class="d">${i === 0 ? "Today" : dayName(d.date)}</span><span class="muted" style="width:62px">${d.t_max}° / ${d.t_min}°</span>
           <div class="rainbar"><i style="width:${d.rain_prob}%"></i></div><b style="width:44px;text-align:right">${d.rain_prob}%</b></div>`).join("")}
@@ -328,7 +330,7 @@ const screens = {
     const waiting = state.outbox.filter((o) => o.type === "question")
       .map((o) => ({ body: o.payload.body, kind: o.payload.kind ?? (o.payload.photo ? "photo" : "text"), photo: o.payload.photo, waiting: true }));
     const qs = [...waiting, ...(state.home?.questions ?? [])];
-    const title = (q) => q.kind === "callback" ? "📞 You asked an officer to call you" : q.body ? esc(q.body) : "📷 Photo";
+    const title = (q) => q.kind === "callback" ? `${ic("phone")} You asked an officer to call you` : q.body ? esc(q.body) : `${ic("camera")} Photo`;
     return `
       ${errBox()}
       ${state.notice ? `<div class="card notice">${esc(state.notice)}</div>` : ""}
@@ -336,15 +338,15 @@ const screens = {
         <label class="field">Your question<textarea name="body" rows="3" maxlength="500" placeholder="My pepper leaves are turning yellow…" style="font:inherit;padding:10px;border-radius:12px;border:1px solid var(--line)"></textarea></label>
         ${state.photo
           ? `<div class="photo-pick"><img src="${state.photo}" alt="Your photo"><button type="button" class="link" data-action="remove-photo">Remove photo</button></div>`
-          : `<label class="btn ghost photo-btn">📷 Add a photo of the problem<input type="file" accept="image/*" capture="environment" data-action="photo" hidden></label>`}
+          : `<label class="btn ghost photo-btn">${ic("camera")} Add a photo of the problem<input type="file" accept="image/*" capture="environment" data-action="photo" hidden></label>`}
         <button class="btn">Send to an extension officer</button>
         <small class="muted">The answer comes here and by SMS. A photo helps the officer see the problem.</small>
       </form>
-      <button class="btn ghost" data-action="callback" style="width:100%;margin-bottom:12px">📞 Ask an officer to call me (free)</button>
+      <button class="btn ghost" data-action="callback" style="width:100%;margin-bottom:12px">${ic("phone")} Ask an officer to call me (free)</button>
       ${qs.map((q) => `<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14.5px">${title(q)}</b>
         <span class="status st-${q.waiting ? "waiting" : q.status}">${q.waiting ? "Waiting to send" : q.status === "answered" ? (q.kind === "callback" ? "Called" : "Answered") : "With officer"}</span></div>
-        ${q.photo ? `<img class="q-photo" src="${q.photo}" alt="">` : q.has_photo ? `<div class="muted" style="font-size:13px;margin-top:4px">📷 Photo sent</div>` : ""}
-        ${q.answer ? `<div class="answer-box">👩🏾‍🌾 ${esc(q.answer)}</div>` : ""}</div>`).join("")}`;
+        ${q.photo ? `<img class="q-photo" src="${q.photo}" alt="">` : q.has_photo ? `<div class="muted" style="font-size:13px;margin-top:4px">${ic("camera")} Photo sent</div>` : ""}
+        ${q.answer ? `<div class="answer-box"><b>${ic("badge-check")} Extension officer</b><div>${esc(q.answer)}</div></div>` : ""}</div>`).join("")}`;
   },
 
   profile() {
