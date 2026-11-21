@@ -18,11 +18,11 @@ const FARMER = {
 };
 
 const WEATHER = [
-  { day: "Today", icon: "🌧️", hi: 29, lo: 23, rain: 80, note: "Heavy rain after 2pm" },
-  { day: "Wed", icon: "⛈️", hi: 28, lo: 23, rain: 90, note: "Thunderstorm" },
-  { day: "Thu", icon: "🌦️", hi: 30, lo: 24, rain: 55, note: "Showers" },
-  { day: "Fri", icon: "⛅", hi: 31, lo: 24, rain: 30, note: "Partly cloudy" },
-  { day: "Sat", icon: "☀️", hi: 32, lo: 24, rain: 10, note: "Good day to spray" }
+  { day: "Today", icon: "cloud-rain", hi: 29, lo: 23, rain: 80, note: "Heavy rain after 2pm" },
+  { day: "Wed", icon: "cloud-lightning", hi: 28, lo: 23, rain: 90, note: "Thunderstorm" },
+  { day: "Thu", icon: "cloud-sun-rain", hi: 30, lo: 24, rain: 55, note: "Showers" },
+  { day: "Fri", icon: "cloud-sun", hi: 31, lo: 24, rain: 30, note: "Partly cloudy" },
+  { day: "Sat", icon: "sun", hi: 32, lo: 24, rain: 10, note: "Good day to spray" }
 ];
 
 const TASKS = [
@@ -116,7 +116,7 @@ const PRICES = [
 const CHAT = [
   { from: "farmer", text: "My pepper leaves dey curling and turning yellow. What I can do?", time: "08:12" },
   { from: "officer", text: "Good morning Kollie. Please send a photo of the leaves, top and underneath. It may be whitefly or aphids.", time: "08:40", who: "Ext. Officer Mulbah — Bong" },
-  { from: "farmer", text: "📷 Photo sent", time: "08:44" },
+  { from: "farmer", text: "[Photo of the curling pepper leaves]", time: "08:44" },
   { from: "officer", text: "I see small white insects underneath — whitefly. Spray neem leaf water (pound 1 kg leaves in 5 L water, leave overnight, strain) every 5 days. I will visit Salala on Thursday.", time: "09:05", who: "Ext. Officer Mulbah — Bong" }
 ];
 

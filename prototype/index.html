@@ -4,37 +4,39 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AgriConnect Liberia — Farmer App</title>
-<meta name="theme-color" content="#1F4D2B">
+<meta name="theme-color" content="#17492F">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="stage">
   <div class="phone" id="phone">
-    <div class="statusbar"><span>9:41</span><span>Lonestar ▂▄▆ · 🔋 76%</span></div>
+    <div class="statusbar"><span>9:41</span><span class="sb">Lonestar <svg class="i"><use href="#i-signal"/></svg><svg class="i"><use href="#i-battery-medium"/></svg> 76%</span></div>
     <div class="appbar" id="appbar"></div>
     <div class="content" id="content"></div>
     <div id="footer"></div>
   </div>
 </div>
 
+<script src="assets/icons.js"></script>
 <script src="data.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 const state = { screen: new URLSearchParams(location.search).get("screen") || "home", crop: "Rice (upland)", market: 1, chat: [...CHAT], diagnosis: null };
 
 const fmt = (n) => n ? n.toLocaleString("en-US") : "—";
+const ic = (name, cls = "i") => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
 function appbar(title, back) {
   $("#appbar").innerHTML =
-    (back ? `<button class="back" onclick="go('home')" aria-label="Back">←</button>` : `<span style="font-size:22px">🌱</span>`) +
-    `<h1>${title}</h1><span class="pill offline" title="Works without internet">● Offline ready</span>`;
+    (back ? `<button class="back" onclick="go('home')" aria-label="Back">${ic("arrow-left")}</button>` : `<span class="mark">${ic("sprout")}</span>`) +
+    `<h1>${title}</h1><span class="pill offline" title="Works without internet">Offline ready</span>`;
 }
 
 function tabbar() {
-  const tabs = [["home","🏠","Home"],["guide","📅","Crops"],["pest","🔍","Pest Doctor"],["market","💰","Prices"],["ask","💬","Ask"]];
-  $("#footer").innerHTML = `<nav class="tabbar">` + tabs.map(([id, ic, l]) =>
-    `<button class="${state.screen===id?'on':''}" onclick="go('${id}')"><span class="ic">${ic}</span>${l}</button>`).join("") + `</nav>`;
+  const tabs = [["home","house","Home"],["guide","calendar-days","Crops"],["pest","scan-search","Pest Doctor"],["market","coins","Prices"],["ask","messages-square","Ask"]];
+  $("#footer").innerHTML = `<nav class="tabbar">` + tabs.map(([id, icon, l]) =>
+    `<button class="${state.screen===id?'on':''}" onclick="go('${id}')" aria-label="${l}">${ic(icon)}<span>${l}</span></button>`).join("") + `</nav>`;
 }
 
 const screens = {
@@ -44,33 +46,33 @@ const screens = {
     return `
       <div>
         <div class="muted">${FARMER.district}, ${FARMER.county} County</div>
-        <p class="hello">Good morning, ${FARMER.name} 👋</p>
+        <p class="hello">Good morning, ${FARMER.name}</p>
       </div>
       <div class="card weather-hero" onclick="go('weather')">
-        <span class="big">${w.icon}</span>
+        <span class="big">${ic(w.icon)}</span>
         <div style="flex:1"><div class="temp">${w.hi}°C</div><div style="font-size:13px">${w.note} · ${w.rain}% rain</div></div>
-        <span style="font-size:13px;font-weight:700">5-day ›</span>
+        <span class="hero-more">5-day ${ic("chevron-right")}</span>
       </div>
       <div class="card alert">
-        <b>⚠ Pest alert — Bong County</b>
+        <b>${ic("triangle-alert")} Pest alert · Bong County</b>
         <div style="font-size:14px;margin-top:4px">Fall armyworm reported in 3 nearby towns. Check your maize & rice this week.</div>
       </div>
       <div class="grid">
-        <button class="tile" onclick="go('guide')"><span class="ic">📅</span>Crop Guide</button>
-        <button class="tile" onclick="go('pest')"><span class="ic">🔍</span>Pest Doctor</button>
-        <button class="tile" onclick="go('market')"><span class="ic">💰</span>Market Prices</button>
-        <button class="tile" onclick="go('ask')"><span class="ic">👩🏾‍🌾</span>Ask Expert</button>
-        <button class="tile" onclick="go('weather')"><span class="ic">🌦️</span>Weather</button>
-        <button class="tile" onclick="go('dealers')"><span class="ic">🏪</span>Agro-dealers</button>
+        <button class="tile" onclick="go('guide')"><span class="ic">${ic("calendar-days")}</span>Crop Guide</button>
+        <button class="tile" onclick="go('pest')"><span class="ic red">${ic("scan-search")}</span>Pest Doctor</button>
+        <button class="tile" onclick="go('market')"><span class="ic gold">${ic("coins")}</span>Market Prices</button>
+        <button class="tile" onclick="go('ask')"><span class="ic gold">${ic("messages-square")}</span>Ask Expert</button>
+        <button class="tile" onclick="go('weather')"><span class="ic blue">${ic("cloud-sun")}</span>Weather</button>
+        <button class="tile" onclick="go('dealers')"><span class="ic">${ic("store")}</span>Agro-dealers</button>
       </div>
       <div class="card">
         <h3>This week on your farm</h3>
         ${TASKS.map((t,i)=>`<label class="task"><input type="checkbox" ${t.done?'checked':''} onchange="TASKS[${i}].done=this.checked"><span><span class="tag">${t.crop}</span> ${t.text}</span></label>`).join("")}
       </div>
       <div class="card" style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:26px">🔊</span>
+        <span class="round-ic" style="background:var(--gold-soft);color:var(--gold-ink)">${ic("volume-2")}</span>
         <div style="flex:1"><b style="font-size:14px">Listen to today’s advice</b><div class="muted">Liberian English · Kpelle · Bassa</div></div>
-        <button class="btn alt" style="width:auto;padding:8px 12px" onclick="alert('In the real app this plays a 60-second voice message.')">▶ Play</button>
+        <button class="btn alt" style="width:auto;padding:8px 12px" onclick="alert('In the real app this plays a 60-second voice message.')">${ic("play")} Play</button>
       </div>`;
   },
 
@@ -86,7 +88,7 @@ const screens = {
           ${steps.map((s,i)=>`<div class="step ${i===2?'now':''}"><div class="when">${s.when}${i===2?' · NOW':''}</div><div class="t">${s.stage}</div><p>${s.tip}</p></div>`).join("")}
         </div>
       </div>
-      <button class="btn ghost" onclick="alert('Reminders will be sent by SMS before each stage.')">🔔 Remind me by SMS</button>`;
+      <button class="btn ghost" onclick="alert('Reminders will be sent by SMS before each stage.')">${ic("bell")} Remind me by SMS</button>`;
   },
 
   pest() {
@@ -96,7 +98,7 @@ const screens = {
     return `
       <div class="photo-drop">
         ${d ? `<div class="fake-photo">${Array.from({length:7},(_,i)=>`<span style="left:${15+i*11}%;top:${20+(i*37)%60}%"></span>`).join("")}</div>`
-            : `<div class="ic">📷</div><b>Take a photo of the sick plant</b><div class="muted">Works offline — we check it when you get network</div>`}
+            : `<div class="ic">${ic("camera")}</div><b>Take a photo of the sick plant</b><div class="muted">Works offline: we check it when you get network</div>`}
       </div>
       <div class="card">
         <h3>Or tell us what you see</h3>
@@ -125,16 +127,16 @@ const screens = {
         <div style="display:flex;justify-content:space-between;align-items:baseline"><h3>Today’s prices (LRD)</h3><span class="muted">Updated 7:30am</span></div>
         <table>
           <tr><th>Item</th><th style="text-align:right">Price</th><th style="text-align:right">Week</th></tr>
-          ${PRICES.map(p=>{const v=p.prices[state.market];const c=p.change>0?`<span class="up">▲ ${p.change}%</span>`:p.change<0?`<span class="down">▼ ${-p.change}%</span>`:`<span class="flat">— 0%</span>`;
+          ${PRICES.map(p=>{const v=p.prices[state.market];const c=p.change>0?`<span class="up">${ic("arrow-up-right")} ${p.change}%</span>`:p.change<0?`<span class="down">${ic("arrow-down-right")} ${-p.change}%</span>`:`<span class="flat">${ic("minus")} 0%</span>`;
             return `<tr><td>${p.item}</td><td class="num">${fmt(v)}</td><td style="text-align:right">${v?c:'<span class="flat">n/a</span>'}</td></tr>`}).join("")}
         </table>
         <p class="muted" style="margin:10px 0 0">Sample data for the prototype. Real prices come from market reporters.</p>
       </div>
       <div class="card" style="display:flex;gap:10px;align-items:center">
-        <span style="font-size:24px">📈</span>
-        <div style="flex:1;font-size:14px"><b>Best place to sell pepper this week:</b> Red Light (Monrovia) — 100 LRD/pile</div>
+        <span class="round-ic" style="background:var(--leaf-soft);color:var(--forest)">${ic("trending-up")}</span>
+        <div style="flex:1;font-size:14px"><b>Best place to sell pepper this week:</b> Red Light (Monrovia), 100 LRD/pile</div>
       </div>
-      <button class="btn ghost" onclick="alert('You will get an SMS when the price changes by more than 10%.')">🔔 Price alert by SMS</button>`;
+      <button class="btn ghost" onclick="alert('You will get an SMS when the price changes by more than 10%.')">${ic("bell")} Price alert by SMS</button>`;
   },
 
   ask() {
@@ -146,20 +148,20 @@ const screens = {
   weather() {
     appbar("Weather · Bong", true);
     return `
-      <div class="card weather-hero"><span class="big">${WEATHER[0].icon}</span><div><div class="temp">${WEATHER[0].hi}°C</div><div style="font-size:13px">${WEATHER[0].note}</div></div></div>
+      <div class="card weather-hero"><span class="big">${ic(WEATHER[0].icon)}</span><div><div class="temp">${WEATHER[0].hi}°C</div><div style="font-size:13px">${WEATHER[0].note}</div></div></div>
       <div class="card">
         <h3>Next 5 days · chance of rain</h3>
-        ${WEATHER.map(w=>`<div class="day"><span class="ic">${w.icon}</span><span class="d">${w.day}</span><div class="rainbar"><i style="width:${w.rain}%"></i></div><b style="width:40px;text-align:right">${w.rain}%</b></div>`).join("")}
+        ${WEATHER.map(w=>`<div class="day"><span class="ic">${ic(w.icon)}</span><span class="d">${w.day}</span><div class="rainbar"><i style="width:${w.rain}%"></i></div><b style="width:40px;text-align:right">${w.rain}%</b></div>`).join("")}
       </div>
       <div class="card" style="background:var(--leaf-soft);border-color:#C5DDBF">
-        <b>💡 Farm advice</b>
+        <b style="display:flex;align-items:center;gap:6px;color:var(--forest)">${ic("lightbulb")} Farm advice</b>
         <div style="font-size:14px;margin-top:4px">Rain until Thursday. Don’t spray or apply fertilizer before Saturday. Make drainage channels for your cassava mounds.</div>
       </div>`;
   },
 
   dealers() {
     appbar("Agro-dealers near you", true);
-    return DEALERS.map(d=>`<div class="card"><div style="display:flex;justify-content:space-between"><h3>${d.name}</h3><span class="tag">${d.dist}</span></div><div class="muted">${d.items}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" style="padding:8px">📞 Call</button><button class="btn ghost" style="padding:8px">🗺 Directions</button></div></div>`).join("");
+    return DEALERS.map(d=>`<div class="card"><div style="display:flex;justify-content:space-between"><h3>${d.name}</h3><span class="tag">${d.dist}</span></div><div class="muted">${d.items}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" style="padding:8px">${ic("phone")} Call</button><button class="btn ghost" style="padding:8px">${ic("navigation")} Directions</button></div></div>`).join("");
   }
 };
 
@@ -187,7 +189,7 @@ function go(s) { state.screen = s; render(); }
 function render() {
   $("#content").innerHTML = screens[state.screen]();
   if (state.screen === "ask") {
-    $("#footer").innerHTML = `<div class="composer"><button class="mic" title="Record voice note" onclick="alert('Voice notes let farmers who don’t read ask questions.')">🎤</button><input id="msg" placeholder="Type your question…" onkeydown="if(event.key==='Enter')sendChat()"><button onclick="sendChat()" aria-label="Send">➤</button></div>`;
+    $("#footer").innerHTML = `<div class="composer"><button class="mic" title="Record voice note" aria-label="Record voice note" onclick="alert('Voice notes let farmers who don’t read ask questions.')">${ic("mic")}</button><input id="msg" placeholder="Type your question…" onkeydown="if(event.key==='Enter')sendChat()"><button onclick="sendChat()" aria-label="Send">${ic("send")}</button></div>`;
   } else tabbar();
 }
 
